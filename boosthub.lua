@@ -1013,9 +1013,12 @@ ConfigureTab:Toggle({
 -- =============================================================
 SettingsTab:Section({ Title = "Developer Info" })
 
-SettingsTab:Paragraph({
+SettingsTab:Button({
     Title = '<font color="#00ff00">Was Made By Xeavz</font>',
-    Desc = "Script Maker | UI Developer"
+    Desc = "Script Maker | UI Developer",
+    Callback = function()
+        WindUI:Notify({ Title = "Boost Hub", Content = "Thanks for using Boost Hub by Xeavz!", Duration = 3 })
+    end,
 })
 
 SettingsTab:Section({ Title = "Community & Links" })
