@@ -2,8 +2,15 @@
 --                     BOOST HUB - WIND UI TEMPLATE
 -- =================================================================
 
--- 1. LOAD WIND UI LIBRARY
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+-- 1. SAFE LOAD WIND UI LIBRARY
+local success, WindUI = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+end)
+
+if not success or not WindUI then
+    warn("Failed to load WindUI! Check your executor or internet connection.")
+    return
+end
 
 -- Global Delay Settings (In Seconds)
 getgenv().CatClickDelay = 0.1 -- Default 100 ms
@@ -1044,7 +1051,7 @@ VisualTab:Toggle({
             end
         end
         getgenv().HideOthers = state
-        WindUI:Notify({ Title = "Hide Players", Content = state and "Hidden other players!" : "Showed other players!", Duration = 3 })
+        WindUI:Notify({ Title = "Hide Players", Content = state and "Hidden other players!" or "Showed other players!", Duration = 3 })
     end,
 })
 
