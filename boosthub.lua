@@ -8,6 +8,7 @@ local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footag
 -- Global Delay Settings (In Seconds)
 getgenv().CatClickDelay = 0.1 -- Default 100 ms
 getgenv().RNGDelay = 15       -- Default 15 seconds
+getgenv().AntiBanEnabled = true -- Default Anti-Ban safety layer
 
 -- Text Generator State Variables
 local textGenText = "testing"
@@ -64,6 +65,8 @@ local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 
 local function TeleportToPlayerServer(username, roleName)
+    WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+    
     local targetUserId
     local successId, errId = pcall(function()
         targetUserId = Players:GetUserIdFromNameAsync(username)
@@ -132,6 +135,9 @@ MainTab:Slider({
         if char and char:FindFirstChild("Humanoid") then
             char.Humanoid.WalkSpeed = speed
         end
+        if speed > 16 then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
+        end
     end,
 })
 
@@ -144,6 +150,9 @@ MainTab:Slider({
         if char and char:FindFirstChild("Humanoid") then
             char.Humanoid.UseJumpPower = true
             char.Humanoid.JumpPower = power
+        end
+        if power > 50 then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
         end
     end,
 })
@@ -162,6 +171,9 @@ MainTab:Toggle({
     Value = false,
     Callback = function(state)
         flying = state
+        if state then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
         local player = game.Players.LocalPlayer
         local char = player.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then return end
@@ -233,6 +245,9 @@ MainTab:Toggle({
     Value = false,
     Callback = function(state)
         infiniteJump = state
+        if state then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
+        end
     end,
 })
 
@@ -253,6 +268,9 @@ MainTab:Toggle({
     Value = false,
     Callback = function(state)
         noclip = state
+        if state then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
+        end
     end,
 })
 
@@ -294,6 +312,7 @@ MainTab:Toggle({
         if not char then return end
 
         if state then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
             invisSavedTransparencies = {}
             for _, v in pairs(char:GetDescendants()) do
                 if v:IsA("BasePart") then
@@ -387,6 +406,8 @@ MainTab:Button({
             return
         end
 
+        WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+
         local targetPlayer
         for _, p in pairs(game.Players:GetPlayers()) do
             if string.find(string.lower(p.Name), string.lower(targetPlayerName)) or 
@@ -441,6 +462,7 @@ FarmTab:Toggle({
     Callback = function(state)
         getgenv().AutoCatClick = state
         if state then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             task.spawn(function()
                 while getgenv().AutoCatClick do
                     local catPart = workspace:FindFirstChild("Cat")
@@ -466,7 +488,11 @@ FarmTab:Toggle({
                             end
                         end
                     end
-                    task.wait(getgenv().CatClickDelay or 0.1)
+                    local delayVal = getgenv().CatClickDelay or 0.1
+                    if getgenv().AntiBanEnabled then
+                        delayVal = delayVal + math.random(1, 10) / 100 -- Adds anti-ban jitter
+                    end
+                    task.wait(delayVal)
                 end
             end)
         end
@@ -481,6 +507,7 @@ FarmTab:Toggle({
     Callback = function(state)
         getgenv().AutoRNG = state
         if state then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             task.spawn(function()
                 while getgenv().AutoRNG do
                     local rngPart = workspace:FindFirstChild("RNGButton", true)
@@ -495,6 +522,9 @@ FarmTab:Toggle({
                     end
                     
                     local delaySec = getgenv().RNGDelay or 15
+                    if getgenv().AntiBanEnabled then
+                        delaySec = delaySec + math.random(1, 4) -- Jitter delay
+                    end
                     local elapsed = 0
                     while elapsed < delaySec and getgenv().AutoRNG do
                         task.wait(0.5)
@@ -513,6 +543,9 @@ FarmTab:Toggle({
     Value = false,
     Callback = function(state)
         getgenv().AutoGoal = state
+        if state then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
         print("Auto Goal set to:", state)
     end,
 })
@@ -520,6 +553,19 @@ FarmTab:Toggle({
 -- =============================================================
 --                     3. AUTOMATION TAB
 -- =============================================================
+AutomationTab:Section({ Title = "Anti-Ban Protection" })
+
+-- Anti-Ban Jitter & Safe Mode Toggle
+AutomationTab:Toggle({
+    Title = "Anti-Ban Safe Mode",
+    Desc = "Randomizes action timings (jitter) to prevent anti-cheat detection",
+    Value = true,
+    Callback = function(state)
+        getgenv().AntiBanEnabled = state
+        WindUI:Notify({ Title = "Anti-Ban", Content = state and "Anti-Ban Safe Mode Enabled!" or "Anti-Ban Safe Mode Disabled!", Duration = 3 })
+    end,
+})
+
 AutomationTab:Section({ Title = "Stand & Begging Tasks" })
 
 -- Auto Claim Stand
@@ -527,6 +573,8 @@ AutomationTab:Button({
     Title = "Auto Claim Stand",
     Desc = "Teleports to nearest unclaimed Stand, claims it, and teleports back",
     Callback = function()
+        WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        
         local player = game.Players.LocalPlayer
         local char = player.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -581,6 +629,8 @@ AutomationTab:Button({
     Title = "Auto Beg",
     Desc = "Teleports to SpawnLocation and equips begging tool",
     Callback = function()
+        WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+
         local player = game.Players.LocalPlayer
         local char = player.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then return end
@@ -636,6 +686,9 @@ AutomationTab:Toggle({
     Value = false,
     Callback = function(state)
         autoEquipSign = state
+        if state then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
+        end
         local player = game.Players.LocalPlayer
         if state then
             charAddedConn = player.CharacterAdded:Connect(function(char)
@@ -689,14 +742,21 @@ AutomationTab:Toggle({
     Callback = function(state)
         getgenv().AutoChatSpam = state
         if state then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             task.spawn(function()
                 while getgenv().AutoChatSpam do
                     local randomIndex = math.random(1, #autoChatMessages)
                     local selectedMsg = autoChatMessages[randomIndex]
                     SendChatMessage(selectedMsg)
                     
+                    -- Dynamic interval with anti-ban jitter
+                    local waitTime = 15
+                    if getgenv().AntiBanEnabled then
+                        waitTime = waitTime + math.random(-3, 4) -- varies between 12 to 19 seconds randomly
+                    end
+                    
                     local elapsed = 0
-                    while elapsed < 15 and getgenv().AutoChatSpam do
+                    while elapsed < waitTime and getgenv().AutoChatSpam do
                         task.wait(0.5)
                         elapsed = elapsed + 0.5
                     end
@@ -736,6 +796,8 @@ HopTab:Button({
 TeleportTab:Section({ Title = "Location Teleports" })
 
 local function TeleportToInstance(instanceObj, displayName)
+    WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+    
     local char = game.Players.LocalPlayer.Character
     if instanceObj and char and char:FindFirstChild("HumanoidRootPart") then
         if instanceObj:IsA("Model") then
