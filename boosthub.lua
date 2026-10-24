@@ -53,6 +53,7 @@ local Window = WindUI:CreateWindow({
 local MainTab = Window:Tab({ Title = "Main", Icon = "house" })
 local FarmTab = Window:Tab({ Title = "Farm", Icon = "zap" })
 local AutomationTab = Window:Tab({ Title = "Automation", Icon = "bot" })
+local HopTab = Window:Tab({ Title = "Hop", Icon = "refresh-cw" })
 local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local ConfigureTab = Window:Tab({ Title = "Configure", Icon = "palette" })
@@ -224,6 +225,26 @@ MainTab:Toggle({
     end,
 })
 
+-- Infinite Jump Toggle
+local infiniteJump = false
+MainTab:Toggle({
+    Title = "Infinite Jump",
+    Desc = "Jump continuously in mid-air",
+    Value = false,
+    Callback = function(state)
+        infiniteJump = state
+    end,
+})
+
+game:GetService("UserInputService").JumpRequest:Connect(function()
+    if infiniteJump then
+        local char = game.Players.LocalPlayer.Character
+        if char and char:FindFirstChildOfClass("Humanoid") then
+            char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end)
+
 -- Noclip Toggle
 local noclip = false
 MainTab:Toggle({
@@ -379,7 +400,7 @@ MainTab:Button({
             local myChar = game.Players.LocalPlayer.Character
             if myChar and myChar:FindFirstChild("HumanoidRootPart") then
                 myChar.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-                WindUI:Notify({ Title = "Teleported", Content = "Teleported to " .. targetPlayer.DisplayName, Duration = 3 })
+                WindUI:Notify({ Title = "Teleported", Content = "Teleported to " + targetPlayer.DisplayName, Duration = 3 })
             end
         else
             WindUI:Notify({ Title = "Error", Content = "Player not found or character missing!", Duration = 3 })
@@ -604,7 +625,61 @@ AutomationTab:Button({
     end,
 })
 
-AutomationTab:Section({ Title = "Chat Automation" })
+AutomationTab:Section({ Title = "Advanced Automation & Chat" })
+
+-- Auto Equip Sign on Spawn Toggle
+local autoEquipSign = false
+local charAddedConn
+AutomationTab:Toggle({
+    Title = "Auto Equip Sign on Spawn",
+    Desc = "Automatically equips your sign tool when you respawn",
+    Value = false,
+    Callback = function(state)
+        autoEquipSign = state
+        local player = game.Players.LocalPlayer
+        if state then
+            charAddedConn = player.CharacterAdded:Connect(function(char)
+                if not autoEquipSign then return end
+                task.wait(1.5)
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    for _, tool in pairs(player.Backpack:GetChildren()) do
+                        if tool:IsA("Tool") then
+                            humanoid:EquipTool(tool)
+                            break
+                        end
+                    end
+                end
+            end)
+            WindUI:Notify({ Title = "Auto Equip", Content = "Auto Equip Sign enabled!", Duration = 3 })
+        else
+            if charAddedConn then charAddedConn:Disconnect() end
+        end
+    end,
+})
+
+-- Auto Rejoin on Kick Toggle
+local autoRejoin = false
+local rejoinConn
+AutomationTab:Toggle({
+    Title = "Auto Rejoin on Kick",
+    Desc = "Automatically rejoins the game if disconnected or kicked",
+    Value = false,
+    Callback = function(state)
+        autoRejoin = state
+        if state then
+            rejoinConn = game:GetService("CoreGui").ChildAdded:Connect(function(child)
+                if autoRejoin and (child.Name == "RobloxPromptGui" or child.Name == "ErrorPrompt") then
+                    task.wait(2)
+                    game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer)
+                end
+            end)
+            WindUI:Notify({ Title = "Auto Rejoin", Content = "Auto Rejoin enabled!", Duration = 3 })
+        else
+            if rejoinConn then rejoinConn:Disconnect() end
+        end
+    end,
+})
 
 -- Auto Chat Spammer Toggle
 AutomationTab:Toggle({
@@ -620,7 +695,6 @@ AutomationTab:Toggle({
                     local selectedMsg = autoChatMessages[randomIndex]
                     SendChatMessage(selectedMsg)
                     
-                    -- Wait 15 seconds safely
                     local elapsed = 0
                     while elapsed < 15 and getgenv().AutoChatSpam do
                         task.wait(0.5)
@@ -634,12 +708,12 @@ AutomationTab:Toggle({
 })
 
 -- =============================================================
---                     4. TELEPORT TAB
+--                        4. HOP TAB
 -- =============================================================
-TeleportTab:Section({ Title = "Server Teleports" })
+HopTab:Section({ Title = "Server Hopping Tasks" })
 
 -- Teleport To Server With Owner/Creator
-TeleportTab:Button({
+HopTab:Button({
     Title = "Teleport To Server With Owner/Creator",
     Desc = "Teleports to owner 'bvetterdays' if currently playing",
     Callback = function()
@@ -648,7 +722,7 @@ TeleportTab:Button({
 })
 
 -- Teleport To Rich Server
-TeleportTab:Button({
+HopTab:Button({
     Title = "Teleport To Rich Server",
     Desc = "Teleports to player 'valchuuz' if currently playing",
     Callback = function()
@@ -656,6 +730,9 @@ TeleportTab:Button({
     end,
 })
 
+-- =============================================================
+--                     5. TELEPORT TAB
+-- =============================================================
 TeleportTab:Section({ Title = "Location Teleports" })
 
 local function TeleportToInstance(instanceObj, displayName)
@@ -735,7 +812,7 @@ TeleportTab:Button({
 })
 
 -- =============================================================
---                      5. VISUAL TAB
+--                      6. VISUAL TAB
 -- =============================================================
 VisualTab:Section({ Title = "Performance & Graphics" })
 
@@ -769,6 +846,55 @@ VisualTab:Toggle({
             WindUI:Notify({ Title = "FPS Boost", Content = "Anti Lag applied successfully!", Duration = 3 })
         else
             WindUI:Notify({ Title = "FPS Boost", Content = "Rejoin the game to restore default graphics.", Duration = 3 })
+        end
+    end,
+})
+
+-- Full Bright Toggle
+local fullBright = false
+local origBrightness, origClock, origShadows
+VisualTab:Toggle({
+    Title = "Full Bright",
+    Desc = "Removes darkness and shadows across the map",
+    Value = false,
+    Callback = function(state)
+        fullBright = state
+        local lighting = game:GetService("Lighting")
+        if state then
+            origBrightness = lighting.Brightness
+            origClock = lighting.ClockTime
+            origShadows = lighting.GlobalShadows
+            
+            lighting.Brightness = 2
+            lighting.ClockTime = 14
+            lighting.GlobalShadows = false
+            WindUI:Notify({ Title = "Full Bright", Content = "Full Bright enabled!", Duration = 3 })
+        else
+            if origBrightness then lighting.Brightness = origBrightness end
+            if origClock then lighting.ClockTime = origClock end
+            if origShadows ~= nil then lighting.GlobalShadows = origShadows end
+        end
+    end,
+})
+
+-- FPS & Ping Display Toggle
+local fpsPingDisplay = false
+VisualTab:Toggle({
+    Title = "FPS & Ping Display",
+    Desc = "Shows real-time FPS and Ping notification ticker",
+    Value = false,
+    Callback = function(state)
+        fpsPingDisplay = state
+        if state then
+            task.spawn(function()
+                while fpsPingDisplay do
+                    local fps = math.floor(1 / game:GetService("RunService").RenderStepped:Wait())
+                    local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
+                    WindUI:Notify({ Title = "Performance Stats", Content = string.format("FPS: %d | Ping: %d ms", fps, ping), Duration = 2 })
+                    task.wait(6)
+                end
+            end)
+            WindUI:Notify({ Title = "Stats", Content = "FPS & Ping Tracker started!", Duration = 3 })
         end
     end,
 })
@@ -852,7 +978,7 @@ VisualTab:Button({
 })
 
 -- =============================================================
---                    6. CONFIGURE TAB
+--                    7. CONFIGURE TAB
 -- =============================================================
 ConfigureTab:Section({ Title = "UI Theme Settings" })
 
@@ -883,7 +1009,7 @@ ConfigureTab:Toggle({
 })
 
 -- =============================================================
---                      7. SETTINGS TAB
+--                      8. SETTINGS TAB
 -- =============================================================
 SettingsTab:Section({ Title = "Community & Links" })
 
