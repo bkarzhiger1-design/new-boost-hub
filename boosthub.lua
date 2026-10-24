@@ -400,7 +400,7 @@ MainTab:Button({
             local myChar = game.Players.LocalPlayer.Character
             if myChar and myChar:FindFirstChild("HumanoidRootPart") then
                 myChar.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-                WindUI:Notify({ Title = "Teleported", Content = "Teleported to " + targetPlayer.DisplayName, Duration = 3 })
+                WindUI:Notify({ Title = "Teleported", Content = "Teleported to " .. targetPlayer.DisplayName, Duration = 3 })
             end
         else
             WindUI:Notify({ Title = "Error", Content = "Player not found or character missing!", Duration = 3 })
@@ -978,7 +978,7 @@ VisualTab:Button({
 })
 
 -- =============================================================
---                    7. CONFIGURE TAB
+--                    6. CONFIGURE TAB
 -- =============================================================
 ConfigureTab:Section({ Title = "UI Theme Settings" })
 
@@ -1009,8 +1009,15 @@ ConfigureTab:Toggle({
 })
 
 -- =============================================================
---                      8. SETTINGS TAB
+--                      7. SETTINGS TAB
 -- =============================================================
+SettingsTab:Section({ Title = "Developer Info" })
+
+SettingsTab:Paragraph({
+    Title = '<font color="#00ff00">Was Made By Xeavz</font>',
+    Desc = "Script Maker | UI Developer"
+})
+
 SettingsTab:Section({ Title = "Community & Links" })
 
 local DiscordInvite = "https://discord.gg/v2BxRgTEP"
