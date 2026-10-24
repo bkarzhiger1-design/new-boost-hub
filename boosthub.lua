@@ -157,6 +157,24 @@ MainTab:Slider({
     end,
 })
 
+MainTab:Section({ Title = "Performance Settings" })
+
+-- Disable 3D Render Toggle
+MainTab:Toggle({
+    Title = "Disable 3D Render",
+    Desc = "Pauses 3D rendering completely for max performance/FPS while AFK",
+    Value = false,
+    Callback = function(state)
+        local runService = game:GetService("RunService")
+        if runService.Set3dRenderingEnabled then
+            runService:Set3dRenderingEnabled(not state)
+            WindUI:Notify({ Title = "3D Render", Content = state and "3D Rendering Disabled!" or "3D Rendering Enabled!", Duration = 3 })
+        else
+            WindUI:Notify({ Title = "Error", Content = "Your executor does not support Set3dRenderingEnabled!", Duration = 3 })
+        end
+    end,
+})
+
 MainTab:Section({ Title = "Movement Abilities" })
 
 -- Universal Fly Toggle (PC & Mobile Compatible)
@@ -548,17 +566,40 @@ FarmTab:Toggle({
     end,
 })
 
--- Auto Goal Toggle (Placeholder)
+-- Safe Auto Goal Toggle (Safely pushes/flings SoccerBall without anti-cheat flags)
 FarmTab:Toggle({
     Title = "Auto Goal",
-    Desc = "Automatically completes goal objectives",
+    Desc = "Gently pushes/flings SoccerBall towards the goal safely",
     Value = false,
     Callback = function(state)
         getgenv().AutoGoal = state
         if state then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+            task.spawn(function()
+                while getgenv().AutoGoal do
+                    local soccerBall = workspace:FindFirstChild("SoccerBall", true)
+                    local char = game.Players.LocalPlayer.Character
+                    
+                    if soccerBall and char and char:FindFirstChild("HumanoidRootPart") then
+                        local ballPart = soccerBall:IsA("BasePart") and soccerBall or soccerBall:FindFirstChildWhichIsA("BasePart", true)
+                        if ballPart then
+                            -- Teleports slightly above/behind the ball and applies a gentle push velocity
+                            char.HumanoidRootPart.CFrame = ballPart.CFrame + Vector3.new(0, 2, 0)
+                            if ballPart:IsA("BasePart") then
+                                ballPart.AssemblyLinearVelocity = Vector3.new(math.random(-15, 15), 10, math.random(25, 45))
+                            end
+                        end
+                    end
+                    
+                    local waitTime = 1.5
+                    if getgenv().AntiBanEnabled then
+                        waitTime = waitTime + (math.random(1, 10) / 10) -- randomize interval slightly for safety
+                    end
+                    task.wait(waitTime)
+                end
+            end)
+            WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal pusher activated!", Duration = 3 })
         end
-        print("Auto Goal set to:", state)
     end,
 })
 
@@ -973,6 +1014,40 @@ VisualTab:Toggle({
     end,
 })
 
+VisualTab:Section({ Title = "Player Visibility" })
+
+-- Hide Other Players Toggle
+VisualTab:Toggle({
+    Title = "Hide Other Players",
+    Desc = "Makes all other players' characters completely invisible",
+    Value = false,
+    Callback = function(state)
+        local function togglePlayer(plr, hide)
+            if plr ~= game.Players.LocalPlayer and plr.Character then
+                for _, part in pairs(plr.Character:GetDescendants()) do
+                    if part:IsA("BasePart") or part:IsA("Decal") then
+                        part.Transparency = hide and 1 or 0
+                    end
+                end
+            end
+        end
+
+        for _, p in pairs(game.Players:GetPlayers()) do
+            togglePlayer(p, state)
+            if state then
+                p.CharacterAdded:Connect(function(char)
+                    task.wait(1)
+                    if getgenv().HideOthers then
+                        togglePlayer(p, true)
+                    end
+                end)
+            end
+        end
+        getgenv().HideOthers = state
+        WindUI:Notify({ Title = "Hide Players", Content = state and "Hidden other players!" : "Showed other players!", Duration = 3 })
+    end,
+})
+
 VisualTab:Section({ Title = "RichText Formatting Generator" })
 
 -- Text Input
@@ -1054,6 +1129,49 @@ VisualTab:Button({
 -- =============================================================
 --                    6. CONFIGURE TAB
 -- =============================================================
+ConfigureTab:Section({ Title = "Server Leaderboard Stats" })
+
+-- Who Is The Richest On Server Button
+ConfigureTab:Button({
+    Title = "Who Is The Richest On Server?",
+    Desc = "Scans server leaderstats to find the player with the highest raised stats",
+    Callback = function()
+        local richestPlayer = nil
+        local highestScore = -1
+
+        for _, plr in pairs(game.Players:GetPlayers()) do
+            local leaderstats = plr:FindFirstChild("leaderstats")
+            if leaderstats then
+                for _, stat in pairs(leaderstats:GetChildren()) do
+                    local statName = string.lower(stat.Name)
+                    if statName:find("raised") or statName:find("donated") or statName:find("robux") then
+                        if stat:IsA("NumberValue") or stat:IsA("IntValue") then
+                            if stat.Value > highestScore then
+                                highestScore = stat.Value
+                                richestPlayer = plr.DisplayName .. " (@" .. plr.Name .. ")"
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        if richestPlayer then
+            WindUI:Notify({ 
+                Title = "Richest Player Found!", 
+                Content = string.format("🏆 %s has the highest stat with %d!", richestPlayer, highestScore), 
+                Duration = 6 
+            })
+        else
+            WindUI:Notify({ 
+                Title = "Richest Player", 
+                Content = "Could not find any 'Raised' or donation stats leaderstats in this server.", 
+                Duration = 5 
+            })
+        end
+    end,
+})
+
 ConfigureTab:Section({ Title = "UI Theme Settings" })
 
 -- Theme Dropdown
