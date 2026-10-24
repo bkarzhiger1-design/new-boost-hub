@@ -16,14 +16,22 @@ local textGenColor = "#ff0000"
 local textGenStrokeColor = "#000000"
 local textGenThickness = 1
 
--- 2. CREATE MAIN WINDOW WITH NATIVE KEY SYSTEM
+-- 2. CREATE MAIN WINDOW WITH SEARCH BAR AND USER PROFILE WIDGET
 local Window = WindUI:CreateWindow({
     Title = "Boost Hub",
-    SubTitle = "v1.0.0",
+    SubTitle = "v1.0.0 | made by xeavz",
     TabWidth = 160,
     Size = UDim2.fromOffset(600, 480),
     Theme = "Dark",
     Transparent = true,
+    HideSearchBar = false, -- Enables Search Bar above tabs
+    User = {
+        Enabled = true,
+        Anonymous = false, -- Displays your real Username & Profile Icon
+        Callback = function()
+            WindUI:Notify({ Title = "Profile", Content = "Logged in as " .. game.Players.LocalPlayer.DisplayName, Duration = 3 })
+        end,
+    },
     KeySystem = {
         Key = "KEY_383783828299263", 
         Note = "Get your key from Linkvertise below!",
@@ -38,7 +46,49 @@ local FarmTab = Window:Tab({ Title = "Farm", Icon = "zap" })
 local AutomationTab = Window:Tab({ Title = "Automation", Icon = "bot" })
 local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
+local ConfigureTab = Window:Tab({ Title = "Configure", Icon = "palette" })
 local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
+
+-- Helper Function for Cross-Server Teleport
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+
+local function TeleportToPlayerServer(username, roleName)
+    local targetUserId
+    local successId, errId = pcall(function()
+        targetUserId = Players:GetUserIdFromNameAsync(username)
+    end)
+
+    if not successId or not targetUserId then
+        WindUI:Notify({ Title = roleName, Content = roleName .. " (" .. username .. ") could not be found!", Duration = 3 })
+        return
+    end
+
+    local isPlaying, currentInstErr, placeId, jobId
+    local successLookup = pcall(function()
+        isPlaying, currentInstErr, placeId, jobId = TeleportService:GetPlayerPlaceInstanceAsync(targetUserId)
+    end)
+
+    if successLookup and placeId and jobId then
+        WindUI:Notify({ Title = roleName, Content = "Found " .. roleName .. "! Teleporting...", Duration = 3 })
+        
+        pcall(function()
+            TeleportService:TeleportToPlaceInstance(placeId, jobId, Players.LocalPlayer)
+        end)
+
+        -- 10 Second Teleport Check
+        task.spawn(function()
+            task.wait(10)
+            WindUI:Notify({ 
+                Title = "Teleport Status", 
+                Content = "Please check that you turn off 'Disable Teleports' and re-execute script. If the issue is still the same try reporting it", 
+                Duration = 6 
+            })
+        end)
+    else
+        WindUI:Notify({ Title = roleName, Content = roleName .. " is not playing right now", Duration = 4 })
+    end
+end
 
 -- =============================================================
 --                        1. MAIN TAB
@@ -424,7 +474,7 @@ FarmTab:Toggle({
 -- =============================================================
 AutomationTab:Section({ Title = "Stand & Begging Tasks" })
 
--- Auto Claim Stand (Checks parts named "Stand")
+-- Auto Claim Stand
 AutomationTab:Button({
     Title = "Auto Claim Stand",
     Desc = "Teleports to nearest unclaimed Stand, claims it, and teleports back",
@@ -436,13 +486,12 @@ AutomationTab:Button({
         local hrp = char.HumanoidRootPart
         local originalCFrame = hrp.CFrame
 
-        -- Search through workspace or workspace.Stands for parts named "Stand"
         local searchContainer = workspace:FindFirstChild("Stands") or workspace
         local nearestStandPrompt = nil
         local shortestDist = math.huge
 
         for _, obj in pairs(searchContainer:GetDescendants()) do
-            if obj.Name == "Stand" or obj.Parent and obj.Parent.Name == "Stand" then
+            if obj.Name == "Stand" or (obj.Parent and obj.Parent.Name == "Stand") then
                 local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
                 if prompt then
                     local targetPart = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
@@ -479,7 +528,7 @@ AutomationTab:Button({
     end,
 })
 
--- Auto Beg (Teleports to SpawnLocation, equips tool from inventory)
+-- Auto Beg
 AutomationTab:Button({
     Title = "Auto Beg",
     Desc = "Teleports to SpawnLocation and equips begging tool",
@@ -499,7 +548,6 @@ AutomationTab:Button({
 
         local toolToEquip = nil
 
-        -- Check Backpack for a tool
         if player:FindFirstChild("Backpack") then
             for _, item in pairs(player.Backpack:GetChildren()) do
                 if item:IsA("Tool") then
@@ -509,7 +557,6 @@ AutomationTab:Button({
             end
         end
 
-        -- Check if tool is already in Character
         if not toolToEquip then
             for _, item in pairs(char:GetChildren()) do
                 if item:IsA("Tool") then
@@ -533,6 +580,26 @@ AutomationTab:Button({
 -- =============================================================
 --                     4. TELEPORT TAB
 -- =============================================================
+TeleportTab:Section({ Title = "Server Teleports" })
+
+-- Teleport To Server With Owner/Creator
+TeleportTab:Button({
+    Title = "Teleport To Server With Owner/Creator",
+    Desc = "Teleports to owner 'bvetterdays' if currently playing",
+    Callback = function()
+        TeleportToPlayerServer("bvetterdays", "Owner")
+    end,
+})
+
+-- Teleport To Rich Server
+TeleportTab:Button({
+    Title = "Teleport To Rich Server",
+    Desc = "Teleports to player 'valchuuz' if currently playing",
+    Callback = function()
+        TeleportToPlayerServer("valchuuz", "Rich Server Player")
+    end,
+})
+
 TeleportTab:Section({ Title = "Location Teleports" })
 
 local function TeleportToInstance(instanceObj, displayName)
@@ -729,7 +796,38 @@ VisualTab:Button({
 })
 
 -- =============================================================
---                      6. SETTINGS TAB
+--                    6. CONFIGURE TAB
+-- =============================================================
+ConfigureTab:Section({ Title = "UI Theme Settings" })
+
+-- Theme Dropdown
+ConfigureTab:Dropdown({
+    Title = "UI Theme",
+    Desc = "Select your preferred WindUI color theme",
+    Values = { "Dark", "DarkRed", "Light", "Rose", "Aqua", "Amethyst", "Emerald", "Midnight" },
+    Default = "Dark",
+    Callback = function(selectedTheme)
+        if WindUI and WindUI.SetTheme then
+            WindUI:SetTheme(selectedTheme)
+            WindUI:Notify({ Title = "Theme Changed", Content = "UI theme updated to " .. selectedTheme, Duration = 3 })
+        end
+    end,
+})
+
+-- Transparency Toggle
+ConfigureTab:Toggle({
+    Title = "Window Transparency",
+    Desc = "Enable glass/blur transparency effect on window",
+    Value = true,
+    Callback = function(state)
+        if Window and Window.SetTransparent then
+            Window:SetTransparent(state)
+        end
+    end,
+})
+
+-- =============================================================
+--                      7. SETTINGS TAB
 -- =============================================================
 SettingsTab:Section({ Title = "Community & Links" })
 
