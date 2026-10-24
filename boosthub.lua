@@ -454,47 +454,59 @@ FarmTab:Slider({
 
 FarmTab:Section({ Title = "Automation Toggles" })
 
--- Auto Cat Click Toggle (Strictly workspace.Cat)
+-- Auto Cat Click System Variables & Functions
+local gato = nil
+local function acharGato()
+    if gato and gato.Parent then return gato end
+    for _, o in pairs(workspace:GetDescendants()) do
+        if o:IsA("ClickDetector") then
+            local n = string.lower(o.Parent.Name)
+            if string.find(n,"cat") or string.find(n,"gato") or string.find(n,"leader") or string.find(n,"clic") then
+                gato = o
+                return o
+            end
+        end
+    end
+    return nil
+end
+
+local function loop(alvo)
+    local cx = (getconnections and getconnections(alvo.MouseClick)) or {}
+    while getgenv().AutoCatClick and alvo and alvo.Parent do
+        if #cx > 0 then
+            for _, c in pairs(cx) do c:Fire() end
+        else
+            fireclickdetector(alvo)
+        end
+        
+        local delayVal = getgenv().CatClickDelay or 0.1
+        if getgenv().AntiBanEnabled then
+            delayVal = delayVal + math.random(1, 10) / 100 -- adds anti-ban jitter
+        end
+        task.wait(delayVal)
+    end
+end
+
+-- Auto Cat Click Toggle
 FarmTab:Toggle({
     Title = "Auto Cat Click",
-    Desc = "Automatically clicks the 'Cat' part",
+    Desc = "Automatically searches and clicks targets using ClickDetector scanner",
     Value = false,
     Callback = function(state)
         getgenv().AutoCatClick = state
         if state then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-            task.spawn(function()
-                while getgenv().AutoCatClick do
-                    local catPart = workspace:FindFirstChild("Cat")
-                    local char = game.Players.LocalPlayer.Character
-                    
-                    if catPart then
-                        local cd = catPart:FindFirstChildOfClass("ClickDetector") or catPart:FindFirstChildWhichIsA("ClickDetector", true)
-                        if cd and fireclickdetector then
-                            fireclickdetector(cd)
-                        end
-                        
-                        local prompt = catPart:FindFirstChildOfClass("ProximityPrompt") or catPart:FindFirstChildWhichIsA("ProximityPrompt", true)
-                        if prompt and fireproximityprompt then
-                            fireproximityprompt(prompt)
-                        end
-                        
-                        if char and char:FindFirstChild("HumanoidRootPart") then
-                            local touchPart = catPart:IsA("BasePart") and catPart or catPart:FindFirstChildWhichIsA("BasePart", true)
-                            if touchPart then
-                                firetouchinterest(char.HumanoidRootPart, touchPart, 0)
-                                task.wait(0.02)
-                                firetouchinterest(char.HumanoidRootPart, touchPart, 1)
-                            end
-                        end
-                    end
-                    local delayVal = getgenv().CatClickDelay or 0.1
-                    if getgenv().AntiBanEnabled then
-                        delayVal = delayVal + math.random(1, 10) / 100 -- Adds anti-ban jitter
-                    end
-                    task.wait(delayVal)
-                end
-            end)
+            local tgt = acharGato()
+            if tgt then
+                WindUI:Notify({ Title = "Auto Cat Click", Content = "Status: Metralhando com sucesso! 🔥", Duration = 3 })
+                task.spawn(loop, tgt)
+                task.spawn(loop, tgt)
+            else
+                WindUI:Notify({ Title = "Auto Cat Click", Content = "Status: Gato não encontrado.", Duration = 3 })
+                getgenv().AutoCatClick = false
+            end
+        else
+            gato = nil
         end
     end,
 })
