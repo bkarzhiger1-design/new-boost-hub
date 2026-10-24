@@ -16,6 +16,15 @@ local textGenColor = "#ff0000"
 local textGenStrokeColor = "#000000"
 local textGenThickness = 1
 
+-- Auto Chat Spammer Messages List
+local autoChatMessages = {
+    "Every robux is appreciated!",
+    "Thank for your donations! Goal is 5k",
+    "Any given amount will be appreciated!",
+    "My goal is to reach 5k and buy a new avatar!",
+    "Currently afk. Any given amount will be appreciated!"
+}
+
 -- 2. CREATE MAIN WINDOW WITH SEARCH BAR AND USER PROFILE WIDGET
 local Window = WindUI:CreateWindow({
     Title = "Boost Hub",
@@ -87,6 +96,24 @@ local function TeleportToPlayerServer(username, roleName)
         end)
     else
         WindUI:Notify({ Title = roleName, Content = roleName .. " is not playing right now", Duration = 4 })
+    end
+end
+
+-- Helper Function for Chat Messages (Supports Modern & Legacy Chat)
+local function SendChatMessage(msg)
+    local TextChatService = game:GetService("TextChatService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+    if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+        local generalChannel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+        if generalChannel then
+            generalChannel:SendAsync(msg)
+        end
+    else
+        local legacyRemote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+        if legacyRemote and legacyRemote:FindFirstChild("SayMessageRequest") then
+            legacyRemote.SayMessageRequest:FireServer(msg, "All")
+        end
     end
 end
 
@@ -573,6 +600,35 @@ AutomationTab:Button({
             WindUI:Notify({ Title = "Auto Beg", Content = "Successfully started Auto Begging.", Duration = 4 })
         else
             WindUI:Notify({ Title = "Auto Beg", Content = "Buy a sign in a shop first!", Duration = 4 })
+        end
+    end,
+})
+
+AutomationTab:Section({ Title = "Chat Automation" })
+
+-- Auto Chat Spammer Toggle
+AutomationTab:Toggle({
+    Title = "Auto Chat Spammer",
+    Desc = "Sends a random begging message in game chat every 15 seconds",
+    Value = false,
+    Callback = function(state)
+        getgenv().AutoChatSpam = state
+        if state then
+            task.spawn(function()
+                while getgenv().AutoChatSpam do
+                    local randomIndex = math.random(1, #autoChatMessages)
+                    local selectedMsg = autoChatMessages[randomIndex]
+                    SendChatMessage(selectedMsg)
+                    
+                    -- Wait 15 seconds safely
+                    local elapsed = 0
+                    while elapsed < 15 and getgenv().AutoChatSpam do
+                        task.wait(0.5)
+                        elapsed = elapsed + 0.5
+                    end
+                end
+            end)
+            WindUI:Notify({ Title = "Auto Chat", Content = "Auto Chat Spammer enabled!", Duration = 3 })
         end
     end,
 })
