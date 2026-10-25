@@ -12,6 +12,17 @@ if not success or not WindUI then
     return
 end
 
+-- GAME CHECK VERIFICATION
+local TARGET_PLACE_ID = 12069083555
+if game.PlaceId ~= TARGET_PLACE_ID then
+    WindUI:Notify({
+        Title = "Wrong Game!",
+        Content = "Wrong Game! Are you sure that you are playing PLS WAIT? ",
+        Duration = 10
+    })
+    return
+end
+
 -- Global Config Storage Table (For Saving / Loading Settings)
 getgenv().BoostHubConfig = getgenv().BoostHubConfig or {
     AutoCatClick = false,
@@ -161,7 +172,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Restored window subtitle (v1.0.0 | made by xeavz)\n[-] Added Normal Server Hop and Small Server Hop\n[-] Fixed UI Themes & Ban Warnings",
+            Content = "[-] Added PLS WAIT game verification check\n[-] Normal Server Hop and Small Server Hop active\n[-] Fixed UI Themes & Ban Warnings",
             Duration = 8
         })
     end,
