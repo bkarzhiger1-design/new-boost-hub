@@ -90,6 +90,7 @@ local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
 -- Helper Services for Server Hopping & Client Features
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
 
 -- Helper Function to Attempt Teleporting to a Player's Server
 local function TryTeleportToPlayer(username, roleName)
@@ -160,7 +161,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Ban Warnings only show when Anti-Ban Safe Mode is OFF\n[-] Adjusted Auto Claim Stand hold duration to 2 seconds\n[-] Scans workspace ProximityPrompts directly\n[-] Added Instant Proximity Prompts",
+            Content = "[-] Fixed UI Themes dropdown & engine integration\n[-] Added Normal Server Hop and Small Server Hop\n[-] Removed non-functional Richest Player button\n[-] Ban Warnings only show when Anti-Ban Safe Mode is OFF",
             Duration = 8
         })
     end,
@@ -1140,6 +1141,87 @@ AutomationTab:Toggle({
 HopTab:Section({ Title = "Server Hopping Tasks" })
 
 HopTab:Button({
+    Title = "Normal Server Hop",
+    Desc = "Teleports to a random available server in this game",
+    Callback = function()
+        WindUI:Notify({ Title = "Server Hop", Content = "Searching for a new server...", Duration = 3 })
+        task.spawn(function()
+            local placeId = game.PlaceId
+            local servers = {}
+            local req = (syn and syn.request) or (http and http.request) or http_request or request
+            if req then
+                local raw = req({ Url = string.format("https://games.roblox.com/v1/games/%d/servers/0?sortOrder=Desc&limit=100", placeId) })
+                if raw and raw.Body then
+                    local data = HttpService:JSONDecode(raw.Body)
+                    if data and data.data then
+                        for _, server in ipairs(data.data) do
+                            if type(server) == "table" and server.id ~= game.JobId and server.playing < server.maxPlayers then
+                                table.insert(servers, server.id)
+                            end
+                        end
+                    end
+                end
+            end
+
+            if #servers > 0 then
+                local targetJob = servers[math.random(1, #servers)]
+                TeleportService:TeleportToPlaceInstance(placeId, targetJob, Players.LocalPlayer)
+            else
+                TeleportService:Teleport(placeId, Players.LocalPlayer)
+            end
+        end)
+    end,
+})
+
+HopTab:Button({
+    Title = "Small Server Hop",
+    Desc = "Teleports to a server with a low player count",
+    Callback = function()
+        WindUI:Notify({ Title = "Small Server Hop", Content = "Searching for low-player servers...", Duration = 3 })
+        task.spawn(function()
+            local placeId = game.PlaceId
+            local req = (syn and syn.request) or (http and http.request) or http_request or request
+            if not req then
+                WindUI:Notify({ Title = "Error", Content = "Your executor does not support HTTP requests!", Duration = 4 })
+                return
+            end
+
+            local cursor = ""
+            local foundTarget = false
+
+            for i = 1, 5 do
+                local url = string.format("https://games.roblox.com/v1/games/%d/servers/0?sortOrder=Asc&limit=100", placeId)
+                if cursor ~= "" then
+                    url = url .. "&cursor=" .. cursor
+                end
+
+                local raw = req({ Url = url })
+                if raw and raw.Body then
+                    local data = HttpService:JSONDecode(raw.Body)
+                    if data and data.data then
+                        for _, server in ipairs(data.data) do
+                            if type(server) == "table" and server.id ~= game.JobId and server.playing > 0 and server.playing < server.maxPlayers then
+                                WindUI:Notify({ Title = "Small Server Hop", Content = "Found server with " .. tostring(server.playing) .. " players! Teleporting...", Duration = 3 })
+                                TeleportService:TeleportToPlaceInstance(placeId, server.id, Players.LocalPlayer)
+                                foundTarget = true
+                                break
+                            end
+                        end
+                        if foundTarget then break end
+                        cursor = data.nextPageCursor or ""
+                        if cursor == "" then break end
+                    end
+                end
+            end
+
+            if not foundTarget then
+                WindUI:Notify({ Title = "Server Hop Failed", Content = "Could not find a smaller server right now.", Duration = 4 })
+            end
+        end)
+    end,
+})
+
+HopTab:Button({
     Title = "Join Owner Server",
     Desc = "Teleports to owner 'bvetterdays' if currently playing",
     Callback = function()
@@ -1438,60 +1520,22 @@ ConfigureTab:Button({
     end,
 })
 
-ConfigureTab:Section({ Title = "Server Leaderboard Stats" })
-
-ConfigureTab:Button({
-    Title = "Who Is The Richest On Server?",
-    Desc = "Scans server leaderboard stats to find the player with the highest raised stats",
-    Callback = function()
-        local richestPlayerName = nil
-        local highestScore = -1
-
-        for _, plr in pairs(game.Players:GetPlayers()) do
-            local leaderstats = plr:FindFirstChild("leaderstats")
-            if leaderstats then
-                for _, stat in pairs(leaderstats:GetChildren()) do
-                    local statName = string.lower(stat.Name)
-                    if statName:find("raised") or statName:find("donated") or statName:find("robux") then
-                        if stat:IsA("NumberValue") or stat:IsA("IntValue") then
-                            if stat.Value > highestScore then
-                                highestScore = stat.Value
-                                richestPlayerName = plr.DisplayName .. " (@" .. plr.Name .. ")"
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        if richestPlayerName then
-            WindUI:Notify({ 
-                Title = "Richest Player Found!", 
-                Content = string.format("🏆 Richest: %s (Raised: %d)", richestPlayerName, highestScore), 
-                Duration = 6 
-            })
-        else
-            WindUI:Notify({ 
-                Title = "Richest Player", 
-                Content = "Could not find any 'Raised' leaderstats values in this server.", 
-                Duration = 5 
-            })
-        end
-    end,
-})
-
 ConfigureTab:Section({ Title = "UI Theme Settings" })
 
 ConfigureTab:Dropdown({
     Title = "UI Theme",
     Desc = "Select your preferred WindUI color theme",
-    Values = { "Dark", "DarkRed", "Light", "Rose", "Aqua", "Amethyst", "Emerald", "Midnight" },
+    Values = { "Dark", "Light", "Rose", "Emerald", "Midnight", "Red", "Aquamarine", "Amethyst" },
     Default = "Dark",
     Callback = function(selectedTheme)
-        if WindUI and WindUI.SetTheme then
-            WindUI:SetTheme(selectedTheme)
-            WindUI:Notify({ Title = "Theme Changed", Content = "UI theme updated to " .. selectedTheme, Duration = 3 })
-        end
+        pcall(function()
+            if Window and Window.SetTheme then
+                Window:SetTheme(selectedTheme)
+            elseif WindUI and WindUI.SetTheme then
+                WindUI:SetTheme(selectedTheme)
+            end
+        end)
+        WindUI:Notify({ Title = "Theme Changed", Content = "UI theme updated to " .. selectedTheme, Duration = 3 })
     end,
 })
 
