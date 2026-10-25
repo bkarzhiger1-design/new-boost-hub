@@ -160,7 +160,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)\n[-] Added Premium Key Purchase Option\n[-] Fixed Auto Goal (Auto Anchors Character)\n[-] Added Client Tab (Custom Audio & Morph)",
+            Content = "[-] Reworked Auto Claim Stand (Uses BaseEmitter & Proximity Check)\n[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)\n[-] Fixed Auto Goal (Auto Anchors Character)\n[-] Added Client Tab (Custom Audio & Morph)",
             Duration = 8
         })
     end,
@@ -862,12 +862,13 @@ AutomationTab:Toggle({
 
 AutomationTab:Section({ Title = "Stand & Begging Tasks" })
 
+-- REWORKED AUTO CLAIM STAND (BASEEMITTER + PROXIMITY CHECK + SKIP LOGIC)
 AutomationTab:Button({
     Title = "Auto Claim Stand",
-    Desc = "Teleports to nearest unclaimed Stand, claims it, and teleports back",
+    Desc = "Teleports to random BaseEmitter, checks for ProximityPrompt, and returns",
     Callback = function()
         WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-        
+
         local player = game.Players.LocalPlayer
         local char = player.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -875,44 +876,68 @@ AutomationTab:Button({
         local hrp = char.HumanoidRootPart
         local originalCFrame = hrp.CFrame
 
-        local searchContainer = workspace:FindFirstChild("Stands") or workspace
-        local nearestStandPrompt = nil
-        local shortestDist = math.huge
+        -- Gather all BaseEmitter parts
+        local emitters = {}
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj.Name == "BaseEmitter" and obj:IsA("BasePart") then
+                table.insert(emitters, obj)
+            end
+        end
 
-        for _, obj in pairs(searchContainer:GetDescendants()) do
-            if obj.Name == "Stand" or (obj.Parent and obj.Parent.Name == "Stand") then
-                local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if #emitters == 0 then
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No BaseEmitter parts found in workspace!", Duration = 4 })
+            return
+        end
+
+        -- Shuffle emitters randomly
+        for i = #emitters, 2, -1 do
+            local j = math.random(1, i)
+            emitters[i], emitters[j] = emitters[j], emitters[i]
+        end
+
+        local claimed = false
+        for _, emitter in ipairs(emitters) do
+            if emitter and emitter.Parent then
+                -- Teleport to current emitter
+                hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
+                task.wait(0.4)
+
+                -- Check for proximity prompt in parents or descendants near this emitter
+                local prompt = nil
+                -- Check inside the emitter itself or its parent
+                prompt = emitter:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if not prompt and emitter.Parent then
+                    prompt = emitter.Parent:FindFirstChildWhichIsA("ProximityPrompt", true)
+                end
+
                 if prompt then
-                    local targetPart = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
-                    if targetPart then
-                        local dist = (hrp.Position - targetPart.Position).Magnitude
-                        if dist < shortestDist then
-                            shortestDist = dist
-                            nearestStandPrompt = prompt
-                        end
+                    -- Found prompt! Trigger/Hold it
+                    if fireproximityprompt then
+                        fireproximityprompt(prompt)
+                    else
+                        -- Fallback simulation if fireproximityprompt isn't available
+                        prompt:InputHoldBegin()
+                        task.wait(prompt.HoldDuration + 0.1)
+                        prompt:InputHoldEnd()
                     end
+                    
+                    task.wait(0.5)
+                    claimed = true
+                    break
+                else
+                    -- No prompt found here, continue loop to try another BaseEmitter
+                    task.wait(0.1)
                 end
             end
         end
 
-        if nearestStandPrompt then
-            local targetObj = nearestStandPrompt.Parent
-            if targetObj:IsA("BasePart") then
-                hrp.CFrame = targetObj.CFrame + Vector3.new(0, 3, 0)
-            elseif targetObj:IsA("Model") then
-                hrp.CFrame = targetObj:GetPivot() + Vector3.new(0, 3, 0)
-            end
+        -- Teleport back to original position
+        hrp.CFrame = originalCFrame
 
-            task.wait(0.3)
-            if fireproximityprompt then
-                fireproximityprompt(nearestStandPrompt)
-            end
-
-            task.wait(0.5)
-            hrp.CFrame = originalCFrame
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Successfully claimed Stand and returned!", Duration = 3 })
+        if claimed then
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Successfully claimed a Stand and returned!", Duration = 3 })
         else
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No unclaimed Stand found!", Duration = 3 })
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Checked all BaseEmitters, but no unclaimed Stand prompt was found!", Duration = 4 })
         end
     end,
 })
