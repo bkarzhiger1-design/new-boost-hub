@@ -84,6 +84,7 @@ local HopTab = Window:Tab({ Title = "Hop", Icon = "refresh-cw" })
 local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local ConfigureTab = Window:Tab({ Title = "Configure", Icon = "palette" })
+local OtherTab = Window:Tab({ Title = "Other", Icon = "folder" })
 local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
 
 -- Helper Services for Server Hopping & Client Features
@@ -159,7 +160,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Dual Key System (Linkvertise + Premium Key)\n[-] Added Premium Key Purchase Option\n[-] Fixed Auto Goal (Auto Anchors Character)\n[-] Added Client Tab (Custom Audio & Morph)\n[-] Restored Teleport Tab",
+            Content = "[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)\n[-] Added Premium Key Purchase Option\n[-] Fixed Auto Goal (Auto Anchors Character)\n[-] Added Client Tab (Custom Audio & Morph)",
             Duration = 8
         })
     end,
@@ -1425,7 +1426,21 @@ ConfigureTab:Toggle({
 })
 
 -- =============================================================
---                      9. SETTINGS TAB
+--                        9. OTHER TAB
+-- =============================================================
+OtherTab:Section({ Title = "External Hubs & Scripts" })
+
+OtherTab:Button({
+    Title = "Prixy Hub",
+    Desc = "by ajoapaulo2409",
+    Callback = function()
+        loadstring(game:HttpGet("https://scriptblox.com/raw/FIXED-DONATIONS-PLS-WAIT-Prixy-Hub-auto-Cat-237080"))()
+        WindUI:Notify({ Title = "Prixy Hub", Content = "Loaded Prixy Hub successfully!", Duration = 3 })
+    end,
+})
+
+-- =============================================================
+--                      10. SETTINGS TAB
 -- =============================================================
 SettingsTab:Section({ Title = "Developer Info" })
 
