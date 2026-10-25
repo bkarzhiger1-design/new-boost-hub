@@ -106,7 +106,6 @@ local function TryTeleportToPlayer(username, roleName)
             TeleportService:TeleportToPlaceInstance(placeId, jobId, Players.LocalPlayer)
         end)
 
-        -- 10-Second Check: If player is still on the same server, notify about "Disable Teleports"
         task.spawn(function()
             task.wait(10)
             if game.JobId == initialJobId then
@@ -242,7 +241,6 @@ MainTab:Toggle({
                 local moveDir = Vector3.zero
                 local uis = game:GetService("UserInputService")
 
-                -- PC Keyboard controls
                 if uis:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
                 if uis:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
                 if uis:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
@@ -250,7 +248,6 @@ MainTab:Toggle({
                 if uis:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
                 if uis:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
 
-                -- Mobile Joystick & Jump controls
                 if moveDir.Magnitude == 0 then
                     local joyDir = humanoid.MoveDirection
                     if joyDir.Magnitude > 0 then
@@ -312,7 +309,6 @@ MainTab:Toggle({
     end,
 })
 
--- Noclip Loop Connection
 game:GetService("RunService").Stepped:Connect(function()
     if noclip then
         local char = game.Players.LocalPlayer.Character
@@ -494,7 +490,6 @@ FarmTab:Slider({
 
 FarmTab:Section({ Title = "Automation Toggles" })
 
--- Auto Cat Click System Variables & Functions
 local gato = nil
 local function acharGato()
     if gato and gato.Parent then return gato end
@@ -521,7 +516,7 @@ local function loop(alvo)
         
         local delayVal = getgenv().CatClickDelay or 0.1
         if getgenv().AntiBanEnabled then
-            delayVal = delayVal + math.random(1, 10) / 100 -- adds anti-ban jitter
+            delayVal = delayVal + math.random(1, 10) / 100
         end
         task.wait(delayVal)
     end
@@ -552,7 +547,7 @@ FarmTab:Toggle({
     end,
 })
 
--- Auto RNG Toggle (Strictly workspace.RNGButton)
+-- Auto RNG Toggle
 FarmTab:Toggle({
     Title = "Auto RNG",
     Desc = "Teleports to 'RNGButton' based on set delay",
@@ -588,7 +583,7 @@ FarmTab:Toggle({
                     
                     local delaySec = getgenv().RNGDelay or 15
                     if getgenv().AntiBanEnabled then
-                        delaySec = delaySec + math.random(1, 4) -- Jitter delay
+                        delaySec = delaySec + math.random(1, 4)
                     end
                     local elapsed = 0
                     while elapsed < delaySec and getgenv().AutoRNG do
@@ -601,7 +596,7 @@ FarmTab:Toggle({
     end,
 })
 
--- Safe Auto Goal Toggle (Pushes SoccerBall strictly forward/straight in one direction)
+-- Auto Goal Toggle
 FarmTab:Toggle({
     Title = "Auto Goal",
     Desc = "Gently pushes SoccerBall strictly in one straight direction towards the goal",
@@ -654,7 +649,6 @@ FarmTab:Toggle({
 -- =============================================================
 AutomationTab:Section({ Title = "Anti-Ban Protection" })
 
--- Anti-Ban Jitter & Safe Mode Toggle
 AutomationTab:Toggle({
     Title = "Anti-Ban Safe Mode",
     Desc = "Randomizes action timings (jitter) to prevent anti-cheat detection",
@@ -668,7 +662,6 @@ AutomationTab:Toggle({
 
 AutomationTab:Section({ Title = "Stand & Begging Tasks" })
 
--- Auto Claim Stand
 AutomationTab:Button({
     Title = "Auto Claim Stand",
     Desc = "Teleports to nearest unclaimed Stand, claims it, and teleports back",
@@ -724,7 +717,6 @@ AutomationTab:Button({
     end,
 })
 
--- Auto Beg
 AutomationTab:Button({
     Title = "Auto Beg",
     Desc = "Teleports to SpawnLocation and equips begging tool",
@@ -745,7 +737,6 @@ AutomationTab:Button({
         end
 
         local toolToEquip = nil
-
         if player:FindFirstChild("Backpack") then
             for _, item in pairs(player.Backpack:GetChildren()) do
                 if item:IsA("Tool") then
@@ -777,7 +768,6 @@ AutomationTab:Button({
 
 AutomationTab:Section({ Title = "Advanced Automation & Chat" })
 
--- Auto Equip Sign on Spawn Toggle
 local autoEquipSign = false
 local charAddedConn
 AutomationTab:Toggle({
@@ -811,7 +801,6 @@ AutomationTab:Toggle({
     end,
 })
 
--- Auto Rejoin on Kick Toggle
 local autoRejoin = false
 local rejoinConn
 AutomationTab:Toggle({
@@ -834,7 +823,6 @@ AutomationTab:Toggle({
     end,
 })
 
--- Auto Chat Spammer Toggle
 AutomationTab:Toggle({
     Title = "Auto Chat Spammer",
     Desc = "Sends a random begging message in game chat every 15 seconds",
@@ -868,11 +856,10 @@ AutomationTab:Toggle({
 })
 
 -- =============================================================
---                        4. HOP TAB (RE-ENABLED & FIXED)
+--                        4. HOP TAB
 -- =============================================================
 HopTab:Section({ Title = "Server Hopping Tasks" })
 
--- 1. Join Owner Server
 HopTab:Button({
     Title = "Join Owner Server",
     Desc = "Teleports to owner 'bvetterdays' if currently playing",
@@ -884,29 +871,16 @@ HopTab:Button({
     end,
 })
 
--- 2. Join Rich Server (Multi-Tier Fallback Chain)
 HopTab:Button({
     Title = "Join Rich Server",
     Desc = "Joins valchuuz -> ZephyReveries -> angel019999",
     Callback = function()
         WindUI:Notify({ Title = "Rich Server", Content = "Searching for available Rich Servers...", Duration = 3 })
 
-        -- Step 1: Check valchuuz
-        if TryTeleportToPlayer("valchuuz", "Rich Server (valchuuz)") then
-            return
-        end
+        if TryTeleportToPlayer("valchuuz", "Rich Server (valchuuz)") then return end
+        if TryTeleportToPlayer("ZephyReveries", "Rich Server (ZephyReveries)") then return end
+        if TryTeleportToPlayer("angel019999", "Rich Server (angel019999)") then return end
 
-        -- Step 2: Check ZephyReveries
-        if TryTeleportToPlayer("ZephyReveries", "Rich Server (ZephyReveries)") then
-            return
-        end
-
-        -- Step 3: Check angel019999
-        if TryTeleportToPlayer("angel019999", "Rich Server (angel019999)") then
-            return
-        end
-
-        -- Step 4: If all 3 are offline
         WindUI:Notify({ Title = "Hop Failed", Content = "No Rich Servers Were Found", Duration = 5 })
     end,
 })
@@ -916,7 +890,6 @@ HopTab:Button({
 -- =============================================================
 VisualTab:Section({ Title = "Performance & Graphics" })
 
--- Anti Lag / FPS Boost Toggle
 VisualTab:Toggle({
     Title = "Anti Lag / FPS Boost",
     Desc = "Optimizes graphics and clears rendering heavy effects for maximum FPS",
@@ -950,7 +923,6 @@ VisualTab:Toggle({
     end,
 })
 
--- Full Bright Toggle
 local fullBright = false
 local origBrightness, origClock, origShadows
 VisualTab:Toggle({
@@ -977,7 +949,6 @@ VisualTab:Toggle({
     end,
 })
 
--- FPS & Ping Display Toggle
 local fpsPingDisplay = false
 VisualTab:Toggle({
     Title = "FPS & Ping Display",
@@ -1001,7 +972,6 @@ VisualTab:Toggle({
 
 VisualTab:Section({ Title = "Player Visibility" })
 
--- Hide Other Players Toggle
 VisualTab:Toggle({
     Title = "Hide Other Players",
     Desc = "Makes all other players' characters completely invisible",
@@ -1035,7 +1005,6 @@ VisualTab:Toggle({
 
 VisualTab:Section({ Title = "RichText Formatting Generator" })
 
--- Text Input
 VisualTab:Input({
     Title = "Type Text",
     Desc = "Enter the text to format",
@@ -1047,7 +1016,6 @@ VisualTab:Input({
     end,
 })
 
--- Font Input
 VisualTab:Input({
     Title = "Choose Font",
     Desc = "e.g., FredokaOne, SourceSans, GothamBold, Arcade",
@@ -1059,7 +1027,6 @@ VisualTab:Input({
     end,
 })
 
--- Color Input
 VisualTab:Input({
     Title = "Choose Text Color (HEX)",
     Desc = "e.g., #ff0000 (Red), #00ff00 (Green), #0000ff (Blue)",
@@ -1071,7 +1038,6 @@ VisualTab:Input({
     end,
 })
 
--- Stroke Thickness Slider (1 to 5)
 VisualTab:Slider({
     Title = "Stroke Thickness",
     Value = { Min = 1, Max = 5, Default = 1 },
@@ -1080,7 +1046,6 @@ VisualTab:Slider({
     end,
 })
 
--- Copy Formatted RichText Result Button
 VisualTab:Button({
     Title = "Copy Formatted RichText",
     Desc = "Generates and copies RichText code to clipboard",
@@ -1116,7 +1081,6 @@ VisualTab:Button({
 -- =============================================================
 ConfigureTab:Section({ Title = "Saved Configurations & Auto Execute" })
 
--- Auto Execute Toggle
 ConfigureTab:Toggle({
     Title = "Auto Execute",
     Desc = "Automatically re-executes Boost Hub on server hop or reconnect",
@@ -1136,7 +1100,6 @@ ConfigureTab:Toggle({
     end,
 })
 
--- Save Configure Button
 ConfigureTab:Button({
     Title = "Save Current Configuration",
     Desc = "Saves your active settings (Auto Cat Click, Delays, etc.)",
@@ -1160,7 +1123,7 @@ ConfigureTab:Button({
 
 ConfigureTab:Section({ Title = "Server Leaderboard Stats" })
 
--- Who Is The Richest On Server Button
+-- Who Is The Richest On Server Button (Fixed to accurately compare actual leaderboard values)
 ConfigureTab:Button({
     Title = "Who Is The Richest On Server?",
     Desc = "Scans server leaderboard stats to find the player with the highest raised stats",
@@ -1185,58 +1148,24 @@ ConfigureTab:Button({
             end
         end
 
-        if richestPlayerName == nil then
-            for _, obj in pairs(workspace:GetDescendants()) do
-                if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-                    local text = string.lower(obj.Text or "")
-                    if text:find("raised") or text:find("robux") or text:find("points") then
-                        local parent = obj.Parent
-                        if parent then
-                            for _, sibling in pairs(parent:GetChildren()) do
-                                if sibling:IsA("TextLabel") and sibling ~= obj then
-                                    local potentialName = sibling.Text
-                                    for _, plr in pairs(game.Players:GetPlayers()) do
-                                        if potentialName == plr.Name or potentialName == plr.DisplayName then
-                                            richestPlayerName = plr.DisplayName .. " (@" .. plr.Name .. ")"
-                                            highestScore = "Listed on Board"
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
         if richestPlayerName then
             WindUI:Notify({ 
                 Title = "Richest Player Found!", 
-                Content = string.format("🏆 Richest: %s (Score: %s)", richestPlayerName, tostring(highestScore)), 
+                Content = string.format("🏆 Richest: %s (Raised: %d)", richestPlayerName, highestScore), 
                 Duration = 6 
             })
         else
-            local fallbackPlr = game.Players:GetPlayers()[1]
-            if fallbackPlr then
-                WindUI:Notify({ 
-                    Title = "Richest Player Found", 
-                    Content = string.format("🏆 Top Listed Player: %s (@%s)", fallbackPlr.DisplayName, fallbackPlr.Name), 
-                    Duration = 6 
-                })
-            else
-                WindUI:Notify({ 
-                    Title = "Richest Player", 
-                    Content = "Could not locate leaderboard values in this server.", 
-                    Duration = 5 
-                })
-            end
+            WindUI:Notify({ 
+                Title = "Richest Player", 
+                Content = "Could not find any 'Raised' leaderstats values in this server.", 
+                Duration = 5 
+            })
         end
     end,
 })
 
 ConfigureTab:Section({ Title = "UI Theme Settings" })
 
--- Theme Dropdown
 ConfigureTab:Dropdown({
     Title = "UI Theme",
     Desc = "Select your preferred WindUI color theme",
@@ -1250,7 +1179,6 @@ ConfigureTab:Dropdown({
     end,
 })
 
--- Transparency Toggle
 ConfigureTab:Toggle({
     Title = "Window Transparency",
     Desc = "Enable glass/blur transparency effect on window",
