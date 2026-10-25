@@ -12,10 +12,22 @@ if not success or not WindUI then
     return
 end
 
+-- Global Config Storage Table (For Saving / Loading Settings)
+getgenv().BoostHubConfig = getgenv().BoostHubConfig or {
+    AutoCatClick = false,
+    AutoRNG = false,
+    AutoGoal = false,
+    AntiBanEnabled = true,
+    AutoChatSpam = false,
+    CatClickDelay = 100,
+    RNGDelay = 15,
+    AutoExecuteEnabled = false
+}
+
 -- Global Delay Settings (In Seconds)
-getgenv().CatClickDelay = 0.1 -- Default 100 ms
-getgenv().RNGDelay = 15       -- Default 15 seconds
-getgenv().AntiBanEnabled = true -- Default Anti-Ban safety layer
+getgenv().CatClickDelay = getgenv().BoostHubConfig.CatClickDelay / 1000
+getgenv().RNGDelay = getgenv().BoostHubConfig.RNGDelay
+getgenv().AntiBanEnabled = getgenv().BoostHubConfig.AntiBanEnabled
 
 -- Text Generator State Variables
 local textGenText = "testing"
@@ -61,54 +73,9 @@ local Window = WindUI:CreateWindow({
 local MainTab = Window:Tab({ Title = "Main", Icon = "house" })
 local FarmTab = Window:Tab({ Title = "Farm", Icon = "zap" })
 local AutomationTab = Window:Tab({ Title = "Automation", Icon = "bot" })
-local HopTab = Window:Tab({ Title = "Hop", Icon = "refresh-cw" })
-local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local ConfigureTab = Window:Tab({ Title = "Configure", Icon = "palette" })
 local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
-
--- Helper Function for Cross-Server Teleport
-local TeleportService = game:GetService("TeleportService")
-local Players = game:GetService("Players")
-
-local function TeleportToPlayerServer(username, roleName)
-    WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-    
-    local targetUserId
-    local successId, errId = pcall(function()
-        targetUserId = Players:GetUserIdFromNameAsync(username)
-    end)
-
-    if not successId or not targetUserId then
-        WindUI:Notify({ Title = roleName, Content = roleName .. " (" .. username .. ") could not be found!", Duration = 3 })
-        return
-    end
-
-    local isPlaying, currentInstErr, placeId, jobId
-    local successLookup = pcall(function()
-        isPlaying, currentInstErr, placeId, jobId = TeleportService:GetPlayerPlaceInstanceAsync(targetUserId)
-    end)
-
-    if successLookup and placeId and jobId then
-        WindUI:Notify({ Title = roleName, Content = "Found " .. roleName .. "! Teleporting...", Duration = 3 })
-        
-        pcall(function()
-            TeleportService:TeleportToPlaceInstance(placeId, jobId, Players.LocalPlayer)
-        end)
-
-        -- 10 Second Teleport Check
-        task.spawn(function()
-            task.wait(10)
-            WindUI:Notify({ 
-                Title = "Teleport Status", 
-                Content = "Please check that you turn off 'Disable Teleports' and re-execute script. If the issue is still the same try reporting it", 
-                Duration = 6 
-            })
-        end)
-    else
-        WindUI:Notify({ Title = roleName, Content = roleName .. " is not playing right now", Duration = 4 })
-    end
-end
 
 -- Helper Function for Chat Messages (Supports Modern & Legacy Chat)
 local function SendChatMessage(msg)
@@ -462,18 +429,20 @@ FarmTab:Section({ Title = "Automation Delays" })
 -- Adjust Delay Of Click (100 ms to 10000 ms)
 FarmTab:Slider({
     Title = "Adjust Delay Of Click (Ms)",
-    Value = { Min = 100, Max = 10000, Default = 100 },
+    Value = { Min = 100, Max = 10000, Default = getgenv().BoostHubConfig.CatClickDelay },
     Callback = function(ms)
         getgenv().CatClickDelay = ms / 1000
+        getgenv().BoostHubConfig.CatClickDelay = ms
     end,
 })
 
 -- Adjust Delay For Auto RNG (5 Seconds to 50 Seconds)
 FarmTab:Slider({
     Title = "Adjust Delay For Auto RNG (Sec)",
-    Value = { Min = 5, Max = 50, Default = 15 },
+    Value = { Min = 5, Max = 50, Default = getgenv().BoostHubConfig.RNGDelay },
     Callback = function(sec)
         getgenv().RNGDelay = sec
+        getgenv().BoostHubConfig.RNGDelay = sec
     end,
 })
 
@@ -516,9 +485,10 @@ end
 FarmTab:Toggle({
     Title = "Auto Cat Click",
     Desc = "Automatically searches and clicks targets using ClickDetector scanner",
-    Value = false,
+    Value = getgenv().BoostHubConfig.AutoCatClick,
     Callback = function(state)
         getgenv().AutoCatClick = state
+        getgenv().BoostHubConfig.AutoCatClick = state
         if state then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             local tgt = acharGato()
@@ -540,9 +510,21 @@ FarmTab:Toggle({
 FarmTab:Toggle({
     Title = "Auto RNG",
     Desc = "Teleports to 'RNGButton' based on set delay",
-    Value = false,
+    Value = getgenv().BoostHubConfig.AutoRNG,
     Callback = function(state)
+        if state and getgenv().AutoGoal then
+            WindUI:Notify({ 
+                Title = "Conflict Warning", 
+                Content = "WARNING! Auto RNG and Auto Goal can't be activated at the same time!", 
+                Duration = 5 
+            })
+            getgenv().AutoRNG = false
+            getgenv().BoostHubConfig.AutoRNG = false
+            return
+        end
+
         getgenv().AutoRNG = state
+        getgenv().BoostHubConfig.AutoRNG = state
         if state then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             task.spawn(function()
@@ -573,13 +555,25 @@ FarmTab:Toggle({
     end,
 })
 
--- Safe Auto Goal Toggle (Safely pushes/flings SoccerBall without anti-cheat flags)
+-- Safe Auto Goal Toggle (Pushes SoccerBall strictly forward/straight in one direction)
 FarmTab:Toggle({
     Title = "Auto Goal",
-    Desc = "Gently pushes/flings SoccerBall towards the goal safely",
-    Value = false,
+    Desc = "Gently pushes SoccerBall strictly in one straight direction towards the goal",
+    Value = getgenv().BoostHubConfig.AutoGoal,
     Callback = function(state)
+        if state and getgenv().AutoRNG then
+            WindUI:Notify({ 
+                Title = "Conflict Warning", 
+                Content = "WARNING! Auto RNG and Auto Goal can't be activated at the same time!", 
+                Duration = 5 
+            })
+            getgenv().AutoGoal = false
+            getgenv().BoostHubConfig.AutoGoal = false
+            return
+        end
+
         getgenv().AutoGoal = state
+        getgenv().BoostHubConfig.AutoGoal = state
         if state then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             task.spawn(function()
@@ -590,22 +584,21 @@ FarmTab:Toggle({
                     if soccerBall and char and char:FindFirstChild("HumanoidRootPart") then
                         local ballPart = soccerBall:IsA("BasePart") and soccerBall or soccerBall:FindFirstChildWhichIsA("BasePart", true)
                         if ballPart then
-                            -- Teleports slightly above/behind the ball and applies a gentle push velocity
-                            char.HumanoidRootPart.CFrame = ballPart.CFrame + Vector3.new(0, 2, 0)
+                            char.HumanoidRootPart.CFrame = ballPart.CFrame + Vector3.new(0, 2, -3)
                             if ballPart:IsA("BasePart") then
-                                ballPart.AssemblyLinearVelocity = Vector3.new(math.random(-15, 15), 10, math.random(25, 45))
+                                ballPart.AssemblyLinearVelocity = Vector3.new(0, 5, 35)
                             end
                         end
                     end
                     
-                    local waitTime = 1.5
+                    local waitTime = 1.2
                     if getgenv().AntiBanEnabled then
-                        waitTime = waitTime + (math.random(1, 10) / 10) -- randomize interval slightly for safety
+                        waitTime = waitTime + (math.random(1, 5) / 10)
                     end
                     task.wait(waitTime)
                 end
             end)
-            WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal pusher activated!", Duration = 3 })
+            WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal linear pusher activated!", Duration = 3 })
         end
     end,
 })
@@ -619,9 +612,10 @@ AutomationTab:Section({ Title = "Anti-Ban Protection" })
 AutomationTab:Toggle({
     Title = "Anti-Ban Safe Mode",
     Desc = "Randomizes action timings (jitter) to prevent anti-cheat detection",
-    Value = true,
+    Value = getgenv().BoostHubConfig.AntiBanEnabled,
     Callback = function(state)
         getgenv().AntiBanEnabled = state
+        getgenv().BoostHubConfig.AntiBanEnabled = state
         WindUI:Notify({ Title = "Anti-Ban", Content = state and "Anti-Ban Safe Mode Enabled!" or "Anti-Ban Safe Mode Disabled!", Duration = 3 })
     end,
 })
@@ -798,9 +792,10 @@ AutomationTab:Toggle({
 AutomationTab:Toggle({
     Title = "Auto Chat Spammer",
     Desc = "Sends a random begging message in game chat every 15 seconds",
-    Value = false,
+    Value = getgenv().BoostHubConfig.AutoChatSpam,
     Callback = function(state)
         getgenv().AutoChatSpam = state
+        getgenv().BoostHubConfig.AutoChatSpam = state
         if state then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             task.spawn(function()
@@ -809,10 +804,9 @@ AutomationTab:Toggle({
                     local selectedMsg = autoChatMessages[randomIndex]
                     SendChatMessage(selectedMsg)
                     
-                    -- Dynamic interval with anti-ban jitter
                     local waitTime = 15
                     if getgenv().AntiBanEnabled then
-                        waitTime = waitTime + math.random(-3, 4) -- varies between 12 to 19 seconds randomly
+                        waitTime = waitTime + math.random(-3, 4)
                     end
                     
                     local elapsed = 0
@@ -828,113 +822,7 @@ AutomationTab:Toggle({
 })
 
 -- =============================================================
---                        4. HOP TAB
--- =============================================================
-HopTab:Section({ Title = "Server Hopping Tasks" })
-
--- Teleport To Server With Owner/Creator
-HopTab:Button({
-    Title = "Teleport To Server With Owner/Creator",
-    Desc = "Teleports to owner 'bvetterdays' if currently playing",
-    Callback = function()
-        TeleportToPlayerServer("bvetterdays", "Owner")
-    end,
-})
-
--- Teleport To Rich Server
-HopTab:Button({
-    Title = "Teleport To Rich Server",
-    Desc = "Teleports to player 'valchuuz' if currently playing",
-    Callback = function()
-        TeleportToPlayerServer("valchuuz", "Rich Server Player")
-    end,
-})
-
--- =============================================================
---                     5. TELEPORT TAB
--- =============================================================
-TeleportTab:Section({ Title = "Location Teleports" })
-
-local function TeleportToInstance(instanceObj, displayName)
-    WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-    
-    local char = game.Players.LocalPlayer.Character
-    if instanceObj and char and char:FindFirstChild("HumanoidRootPart") then
-        if instanceObj:IsA("Model") then
-            char.HumanoidRootPart.CFrame = instanceObj:GetPivot() + Vector3.new(0, 3, 0)
-        elseif instanceObj:IsA("BasePart") then
-            char.HumanoidRootPart.CFrame = instanceObj.CFrame + Vector3.new(0, 3, 0)
-        end
-        WindUI:Notify({ Title = "Teleport", Content = "Teleported to " .. displayName, Duration = 3 })
-    else
-        WindUI:Notify({ Title = "Error", Content = displayName .. " target not found!", Duration = 3 })
-    end
-end
-
--- TP to Cat (workspace.Cat)
-TeleportTab:Button({
-    Title = "TP to Cat",
-    Desc = "Teleport to Cat",
-    Callback = function()
-        TeleportToInstance(workspace:FindFirstChild("Cat"), "Cat")
-    end,
-})
-
--- TP to RNG (workspace.RNGButton)
-TeleportTab:Button({
-    Title = "TP to RNG",
-    Desc = "Teleport to RNGButton",
-    Callback = function()
-        TeleportToInstance(workspace:FindFirstChild("RNGButton"), "RNGButton")
-    end,
-})
-
--- TP to Leaderboard (workspace.Leaderboards["Most Points"])
-TeleportTab:Button({
-    Title = "TP to Leaderboard",
-    Desc = "Teleport to Leaderboards -> Most Points",
-    Callback = function()
-        local leaderboards = workspace:FindFirstChild("Leaderboards")
-        local target = leaderboards and leaderboards:FindFirstChild("Most Points")
-        TeleportToInstance(target, "Leaderboards -> Most Points")
-    end,
-})
-
--- TP to Soccerball (workspace.FootBall.Model)
-TeleportTab:Button({
-    Title = "TP to Soccerball",
-    Desc = "Teleport to FootBall -> Model",
-    Callback = function()
-        local football = workspace:FindFirstChild("FootBall")
-        local target = football and football:FindFirstChild("Model")
-        TeleportToInstance(target, "FootBall -> Model")
-    end,
-})
-
--- TP to AfkTower (workspace.AfkTower.Model)
-TeleportTab:Button({
-    Title = "TP to AfkTower",
-    Desc = "Teleport to AfkTower -> Model",
-    Callback = function()
-        local afkTower = workspace:FindFirstChild("AfkTower")
-        local target = afkTower and afkTower:FindFirstChild("Model")
-        TeleportToInstance(target, "AfkTower -> Model")
-    end,
-})
-
--- TP to Shop (workspace.Stands.Bookshelf)
-TeleportTab:Button({
-    Title = "TP to Shop",
-    Desc = "Teleport to Stands -> Bookshelf",
-    Callback = function()
-        local stands = workspace:FindFirstChild("Stands")
-        local target = stands and stands:FindFirstChild("Bookshelf")
-        TeleportToInstance(target, "Stands -> Bookshelf")
-    end,
-})
-
--- =============================================================
---                      6. VISUAL TAB
+--                      4. VISUAL TAB
 -- =============================================================
 VisualTab:Section({ Title = "Performance & Graphics" })
 
@@ -1134,16 +1022,60 @@ VisualTab:Button({
 })
 
 -- =============================================================
---                    6. CONFIGURE TAB
+--                    5. CONFIGURE TAB
 -- =============================================================
+ConfigureTab:Section({ Title = "Saved Configurations & Auto Execute" })
+
+-- Auto Execute Toggle
+ConfigureTab:Toggle({
+    Title = "Auto Execute",
+    Desc = "Automatically re-executes Boost Hub on server hop or reconnect",
+    Value = getgenv().BoostHubConfig.AutoExecuteEnabled,
+    Callback = function(state)
+        getgenv().BoostHubConfig.AutoExecuteEnabled = state
+        if state and (queue_on_teleport or syn and syn.queue_on_teleport) then
+            local queueFunction = queue_on_teleport or syn.queue_on_teleport
+            queueFunction([[
+                task.wait(2)
+                loadstring(game:HttpGet("YOUR_SCRIPT_URL_HERE"))()
+            ]])
+            WindUI:Notify({ Title = "Auto Execute", Content = "Auto Execute enabled successfully!", Duration = 3 })
+        else
+            WindUI:Notify({ Title = "Auto Execute", Content = state and "Executor doesn't support queue_on_teleport!" or "Auto Execute disabled.", Duration = 4 })
+        end
+    end,
+})
+
+-- Save Configure Button
+ConfigureTab:Button({
+    Title = "Save Current Configuration",
+    Desc = "Saves your active settings (Auto Cat Click, Delays, etc.)",
+    Callback = function()
+        if writefile then
+            local successSave, err = pcall(function()
+                local httpService = game:GetService("HttpService")
+                local encoded = httpService:JSONEncode(getgenv().BoostHubConfig)
+                writefile("BoostHubConfig.json", encoded)
+            end)
+            if successSave then
+                WindUI:Notify({ Title = "Config Saved", Content = "Successfully saved your settings!", Duration = 3 })
+            else
+                WindUI:Notify({ Title = "Error", Content = "Failed to write config file.", Duration = 3 })
+            end
+        else
+            WindUI:Notify({ Title = "Error", Content = "Your executor does not support writefile!", Duration = 3 })
+        end
+    end,
+})
+
 ConfigureTab:Section({ Title = "Server Leaderboard Stats" })
 
 -- Who Is The Richest On Server Button
 ConfigureTab:Button({
     Title = "Who Is The Richest On Server?",
-    Desc = "Scans server leaderstats to find the player with the highest raised stats",
+    Desc = "Scans server leaderboard stats to find the player with the highest raised stats",
     Callback = function()
-        local richestPlayer = nil
+        local richestPlayerName = nil
         local highestScore = -1
 
         for _, plr in pairs(game.Players:GetPlayers()) do
@@ -1155,7 +1087,7 @@ ConfigureTab:Button({
                         if stat:IsA("NumberValue") or stat:IsA("IntValue") then
                             if stat.Value > highestScore then
                                 highestScore = stat.Value
-                                richestPlayer = plr.DisplayName .. " (@" .. plr.Name .. ")"
+                                richestPlayerName = plr.DisplayName .. " (@" .. plr.Name .. ")"
                             end
                         end
                     end
@@ -1163,18 +1095,51 @@ ConfigureTab:Button({
             end
         end
 
-        if richestPlayer then
+        if richestPlayerName == nil then
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+                    local text = string.lower(obj.Text or "")
+                    if text:find("raised") or text:find("robux") or text:find("points") then
+                        local parent = obj.Parent
+                        if parent then
+                            for _, sibling in pairs(parent:GetChildren()) do
+                                if sibling:IsA("TextLabel") and sibling ~= obj then
+                                    local potentialName = sibling.Text
+                                    for _, plr in pairs(game.Players:GetPlayers()) do
+                                        if potentialName == plr.Name or potentialName == plr.DisplayName then
+                                            richestPlayerName = plr.DisplayName .. " (@" .. plr.Name .. ")"
+                                            highestScore = "Listed on Board"
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        if richestPlayerName then
             WindUI:Notify({ 
                 Title = "Richest Player Found!", 
-                Content = string.format("🏆 %s has the highest stat with %d!", richestPlayer, highestScore), 
+                Content = string.format("🏆 Richest: %s (Score: %s)", richestPlayerName, tostring(highestScore)), 
                 Duration = 6 
             })
         else
-            WindUI:Notify({ 
-                Title = "Richest Player", 
-                Content = "Could not find any 'Raised' or donation stats leaderstats in this server.", 
-                Duration = 5 
-            })
+            local fallbackPlr = game.Players:GetPlayers()[1]
+            if fallbackPlr then
+                WindUI:Notify({ 
+                    Title = "Richest Player Found", 
+                    Content = string.format("🏆 Top Listed Player: %s (@%s)", fallbackPlr.DisplayName, fallbackPlr.Name), 
+                    Duration = 6 
+                })
+            else
+                WindUI:Notify({ 
+                    Title = "Richest Player", 
+                    Content = "Could not locate leaderboard values in this server.", 
+                    Duration = 5 
+                })
+            end
         end
     end,
 })
@@ -1208,7 +1173,7 @@ ConfigureTab:Toggle({
 })
 
 -- =============================================================
---                      7. SETTINGS TAB
+--                      6. SETTINGS TAB
 -- =============================================================
 SettingsTab:Section({ Title = "Developer Info" })
 
