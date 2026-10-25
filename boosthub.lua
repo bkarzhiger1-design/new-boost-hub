@@ -160,7 +160,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Adjusted Auto Claim Stand hold duration to 2 seconds\n[-] Scans workspace ProximityPrompts directly\n[-] Added Instant Proximity Prompts\n[-] Dual Key System (Linkvertise + Premium Key)",
+            Content = "[-] Ban Warnings only show when Anti-Ban Safe Mode is OFF\n[-] Adjusted Auto Claim Stand hold duration to 2 seconds\n[-] Scans workspace ProximityPrompts directly\n[-] Added Instant Proximity Prompts",
             Duration = 8
         })
     end,
@@ -176,7 +176,7 @@ MainTab:Slider({
         if char and char:FindFirstChild("Humanoid") then
             char.Humanoid.WalkSpeed = speed
         end
-        if speed > 16 then
+        if speed > 16 and not getgenv().AntiBanEnabled then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
         end
     end,
@@ -191,7 +191,7 @@ MainTab:Slider({
             char.Humanoid.UseJumpPower = true
             char.Humanoid.JumpPower = power
         end
-        if power > 50 then
+        if power > 50 and not getgenv().AntiBanEnabled then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
         end
     end,
@@ -227,7 +227,7 @@ MainTab:Toggle({
     Value = false,
     Callback = function(state)
         flying = state
-        if state then
+        if state and not getgenv().AntiBanEnabled then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
         end
         local player = game.Players.LocalPlayer
@@ -298,7 +298,7 @@ MainTab:Toggle({
     Value = false,
     Callback = function(state)
         infiniteJump = state
-        if state then
+        if state and not getgenv().AntiBanEnabled then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
         end
     end,
@@ -320,7 +320,7 @@ MainTab:Toggle({
     Value = false,
     Callback = function(state)
         noclip = state
-        if state then
+        if state and not getgenv().AntiBanEnabled then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
         end
     end,
@@ -361,7 +361,9 @@ MainTab:Toggle({
         if not char then return end
 
         if state then
-            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
+            if not getgenv().AntiBanEnabled then
+                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
+            end
             invisSavedTransparencies = {}
             for _, v in pairs(char:GetDescendants()) do
                 if v:IsA("BasePart") then
@@ -452,7 +454,9 @@ MainTab:Button({
             return
         end
 
-        WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        if not getgenv().AntiBanEnabled then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
 
         local targetPlayer
         for _, p in pairs(game.Players:GetPlayers()) do
@@ -540,7 +544,9 @@ FarmTab:Toggle({
         getgenv().AutoCatClick = state
         getgenv().BoostHubConfig.AutoCatClick = state
         if state then
-            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+            if not getgenv().AntiBanEnabled then
+                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+            end
             local tgt = acharGato()
             if tgt then
                 WindUI:Notify({ Title = "Auto Cat Click", Content = "Status: Metralhando com sucesso! 🔥", Duration = 3 })
@@ -575,7 +581,9 @@ FarmTab:Toggle({
         getgenv().AutoRNG = state
         getgenv().BoostHubConfig.AutoRNG = state
         if state then
-            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+            if not getgenv().AntiBanEnabled then
+                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+            end
             task.spawn(function()
                 while getgenv().AutoRNG do
                     local rngPart = workspace:FindFirstChild("RNGButton", true)
@@ -632,7 +640,9 @@ FarmTab:Toggle({
             return
         end
 
-        WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        if not getgenv().AntiBanEnabled then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
         
         task.spawn(function()
             while getgenv().AutoGoal do
@@ -896,7 +906,9 @@ AutomationTab:Button({
     Title = "Auto Claim Stand",
     Desc = "Scans all ProximityPrompts, teleports to stand, and stays for 2 seconds",
     Callback = function()
-        WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        if not getgenv().AntiBanEnabled then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
 
         local player = game.Players.LocalPlayer
         local char = player.Character
@@ -984,7 +996,9 @@ AutomationTab:Button({
     Title = "Auto Beg",
     Desc = "Teleports to SpawnLocation and equips begging tool",
     Callback = function()
-        WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        if not getgenv().AntiBanEnabled then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
 
         local player = game.Players.LocalPlayer
         local char = player.Character
@@ -1039,7 +1053,7 @@ AutomationTab:Toggle({
     Value = false,
     Callback = function(state)
         autoEquipSign = state
-        if state then
+        if state and not getgenv().AntiBanEnabled then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
         end
         local player = game.Players.LocalPlayer
@@ -1094,7 +1108,9 @@ AutomationTab:Toggle({
         getgenv().AutoChatSpam = state
         getgenv().BoostHubConfig.AutoChatSpam = state
         if state then
-            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+            if not getgenv().AntiBanEnabled then
+                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+            end
             task.spawn(function()
                 while getgenv().AutoChatSpam do
                     local randomIndex = math.random(1, #autoChatMessages)
@@ -1154,7 +1170,9 @@ HopTab:Button({
 TeleportTab:Section({ Title = "Location Teleports" })
 
 local function TeleportToTarget(targetObj, displayName)
-    WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+    if not getgenv().AntiBanEnabled then
+        WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+    end
     local char = game.Players.LocalPlayer.Character
     if targetObj and char and char:FindFirstChild("HumanoidRootPart") then
         if targetObj:IsA("Model") then
