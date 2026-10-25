@@ -73,9 +73,55 @@ local Window = WindUI:CreateWindow({
 local MainTab = Window:Tab({ Title = "Main", Icon = "house" })
 local FarmTab = Window:Tab({ Title = "Farm", Icon = "zap" })
 local AutomationTab = Window:Tab({ Title = "Automation", Icon = "bot" })
+local HopTab = Window:Tab({ Title = "Hop", Icon = "refresh-cw" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local ConfigureTab = Window:Tab({ Title = "Configure", Icon = "palette" })
 local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
+
+-- Helper Services for Server Hopping
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+
+-- Helper Function to Attempt Teleporting to a Player's Server
+local function TryTeleportToPlayer(username, roleName)
+    local targetUserId
+    local successId = pcall(function()
+        targetUserId = Players:GetUserIdFromNameAsync(username)
+    end)
+
+    if not successId or not targetUserId then
+        return false
+    end
+
+    local isPlaying, currentInstErr, placeId, jobId
+    local successLookup = pcall(function()
+        isPlaying, currentInstErr, placeId, jobId = TeleportService:GetPlayerPlaceInstanceAsync(targetUserId)
+    end)
+
+    if successLookup and placeId and jobId then
+        WindUI:Notify({ Title = roleName, Content = "Found " .. username .. "! Teleporting...", Duration = 3 })
+        
+        local initialJobId = game.JobId
+        pcall(function()
+            TeleportService:TeleportToPlaceInstance(placeId, jobId, Players.LocalPlayer)
+        end)
+
+        -- 10-Second Check: If player is still on the same server, notify about "Disable Teleports"
+        task.spawn(function()
+            task.wait(10)
+            if game.JobId == initialJobId then
+                WindUI:Notify({ 
+                    Title = "Teleport Warning", 
+                    Content = 'Please Check That Your "Disable Teleports" Is Off Because You Can\'t Teleport With This On', 
+                    Duration = 7 
+                })
+            end
+        end)
+        return true
+    end
+
+    return false
+end
 
 -- Helper Function for Chat Messages (Supports Modern & Legacy Chat)
 local function SendChatMessage(msg)
@@ -822,7 +868,51 @@ AutomationTab:Toggle({
 })
 
 -- =============================================================
---                      4. VISUAL TAB
+--                        4. HOP TAB (RE-ENABLED & FIXED)
+-- =============================================================
+HopTab:Section({ Title = "Server Hopping Tasks" })
+
+-- 1. Join Owner Server
+HopTab:Button({
+    Title = "Join Owner Server",
+    Desc = "Teleports to owner 'bvetterdays' if currently playing",
+    Callback = function()
+        local joined = TryTeleportToPlayer("bvetterdays", "Owner Server")
+        if not joined then
+            WindUI:Notify({ Title = "Owner Server", Content = "Owner (bvetterdays) is currently offline or not in a game!", Duration = 4 })
+        end
+    end,
+})
+
+-- 2. Join Rich Server (Multi-Tier Fallback Chain)
+HopTab:Button({
+    Title = "Join Rich Server",
+    Desc = "Joins valchuuz -> ZephyReveries -> angel019999",
+    Callback = function()
+        WindUI:Notify({ Title = "Rich Server", Content = "Searching for available Rich Servers...", Duration = 3 })
+
+        -- Step 1: Check valchuuz
+        if TryTeleportToPlayer("valchuuz", "Rich Server (valchuuz)") then
+            return
+        end
+
+        -- Step 2: Check ZephyReveries
+        if TryTeleportToPlayer("ZephyReveries", "Rich Server (ZephyReveries)") then
+            return
+        end
+
+        -- Step 3: Check angel019999
+        if TryTeleportToPlayer("angel019999", "Rich Server (angel019999)") then
+            return
+        end
+
+        -- Step 4: If all 3 are offline
+        WindUI:Notify({ Title = "Hop Failed", Content = "No Rich Servers Were Found", Duration = 5 })
+    end,
+})
+
+-- =============================================================
+--                      5. VISUAL TAB
 -- =============================================================
 VisualTab:Section({ Title = "Performance & Graphics" })
 
@@ -1022,7 +1112,7 @@ VisualTab:Button({
 })
 
 -- =============================================================
---                    5. CONFIGURE TAB
+--                    6. CONFIGURE TAB
 -- =============================================================
 ConfigureTab:Section({ Title = "Saved Configurations & Auto Execute" })
 
@@ -1173,7 +1263,7 @@ ConfigureTab:Toggle({
 })
 
 -- =============================================================
---                      6. SETTINGS TAB
+--                      7. SETTINGS TAB
 -- =============================================================
 SettingsTab:Section({ Title = "Developer Info" })
 
