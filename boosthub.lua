@@ -160,7 +160,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Fixed Auto Claim Stand to scan workspace ProximityPrompts directly\n[-] Forced strict 5-second hold position on stands\n[-] Added Instant Proximity Prompts\n[-] Dual Key System (Linkvertise + Premium Key)",
+            Content = "[-] Adjusted Auto Claim Stand hold duration to 2 seconds\n[-] Scans workspace ProximityPrompts directly\n[-] Added Instant Proximity Prompts\n[-] Dual Key System (Linkvertise + Premium Key)",
             Duration = 8
         })
     end,
@@ -891,10 +891,10 @@ AutomationTab:Toggle({
     end,
 })
 
--- FIXED AUTO CLAIM STAND (SCANS WORKSPACE PROXIMITY PROMPTS DIRECTLY & HOLDS POSITION FOR 5s)
+-- AUTO CLAIM STAND (2-SECOND HOLD POSITION)
 AutomationTab:Button({
     Title = "Auto Claim Stand",
-    Desc = "Scans all ProximityPrompts, teleports to stand, and stays for 5 seconds",
+    Desc = "Scans all ProximityPrompts, teleports to stand, and stays for 2 seconds",
     Callback = function()
         WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
 
@@ -944,7 +944,7 @@ AutomationTab:Button({
                     hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
                     task.wait(0.5)
 
-                    WindUI:Notify({ Title = "Auto Claim Stand", Content = "Claiming stand! Holding position for 5 seconds...", Duration = 4 })
+                    WindUI:Notify({ Title = "Auto Claim Stand", Content = "Claiming stand! Holding position for 2 seconds...", Duration = 3 })
 
                     if fireproximityprompt then
                         fireproximityprompt(prompt)
@@ -954,9 +954,9 @@ AutomationTab:Button({
                         prompt:InputHoldEnd()
                     end
 
-                    -- Lock character position for a strict 5 seconds
+                    -- Lock character position for a strict 2 seconds
                     local startTime = tick()
-                    while tick() - startTime < 5 do
+                    while tick() - startTime < 2 do
                         if hrp and targetPart then
                             hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
                         end
