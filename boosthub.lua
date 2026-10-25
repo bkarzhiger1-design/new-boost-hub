@@ -172,7 +172,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Added PLS WAIT game verification check\n[-] Normal Server Hop and Small Server Hop active\n[-] Fixed UI Themes & Ban Warnings",
+            Content = "[-] Translated Auto Cat Click status messages to English\n[-] Added PLS WAIT game verification check\n[-] Normal Server Hop and Small Server Hop active",
             Duration = 8
         })
     end,
@@ -561,11 +561,11 @@ FarmTab:Toggle({
             end
             local tgt = acharGato()
             if tgt then
-                WindUI:Notify({ Title = "Auto Cat Click", Content = "Status: Metralhando com sucesso! 🔥", Duration = 3 })
+                WindUI:Notify({ Title = "Auto Cat Click", Content = "Status: Successfully clicking! 🔥", Duration = 3 })
                 task.spawn(loop, tgt)
                 task.spawn(loop, tgt)
             else
-                WindUI:Notify({ Title = "Auto Cat Click", Content = "Status: Gato não encontrado.", Duration = 3 })
+                WindUI:Notify({ Title = "Auto Cat Click", Content = "Status: Cat target not found.", Duration = 3 })
                 getgenv().AutoCatClick = false
             end
         else
