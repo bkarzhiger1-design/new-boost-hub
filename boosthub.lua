@@ -51,12 +51,12 @@ local autoChatMessages = {
     "Currently afk. Any given amount will be appreciated!"
 }
 
--- 2. CREATE MAIN WINDOW WITH SEARCH BAR AND USER PROFILE WIDGET
+-- 2. CREATE MAIN WINDOW (Taller height so tabs don't get cut off)
 local Window = WindUI:CreateWindow({
     Title = "Boost Hub",
     SubTitle = "v1.0.0 | made by xeavz",
     TabWidth = 160,
-    Size = UDim2.fromOffset(600, 480),
+    Size = UDim2.fromOffset(600, 520),
     Theme = "Dark",
     Transparent = true,
     HideSearchBar = false, -- Enables Search Bar above tabs
@@ -75,13 +75,13 @@ local Window = WindUI:CreateWindow({
     }
 })
 
--- 3. CREATE TABS
+-- 3. CREATE TABS (Client placed near top so it's fully visible)
 local MainTab = Window:Tab({ Title = "Main", Icon = "house" })
 local FarmTab = Window:Tab({ Title = "Farm", Icon = "zap" })
+local ClientTab = Window:Tab({ Title = "Client", Icon = "user" })
 local AutomationTab = Window:Tab({ Title = "Automation", Icon = "bot" })
 local HopTab = Window:Tab({ Title = "Hop", Icon = "refresh-cw" })
 local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
-local ClientTab = Window:Tab({ Title = "Client", Icon = "user" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local ConfigureTab = Window:Tab({ Title = "Configure", Icon = "palette" })
 local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
@@ -637,7 +637,141 @@ FarmTab:Toggle({
 })
 
 -- =============================================================
---                     3. AUTOMATION TAB
+--                        3. CLIENT TAB (VISIBLE NEAR TOP)
+-- =============================================================
+ClientTab:Section({ Title = "Custom Audio Player" })
+
+ClientTab:Input({
+    Title = "Audio ID",
+    Desc = "Enter Roblox Audio ID numbers",
+    Placeholder = "18483545",
+    Callback = function(text)
+        customAudioId = text
+    end,
+})
+
+ClientTab:Button({
+    Title = "Play Custom Audio",
+    Desc = "Plays audio locally and mutes all game music",
+    Callback = function()
+        if customAudioId == "" then
+            WindUI:Notify({ Title = "Error", Content = "Please enter an Audio ID first!", Duration = 3 })
+            return
+        end
+
+        if activeCustomSound then
+            activeCustomSound:Stop()
+            activeCustomSound:Destroy()
+            activeCustomSound = nil
+        end
+
+        originalVolumes = {}
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Sound") then
+                originalVolumes[obj] = obj.Volume
+                obj.Volume = 0
+            end
+        end
+        for _, obj in pairs(game:GetService("SoundService"):GetDescendants()) do
+            if obj:IsA("Sound") then
+                originalVolumes[obj] = obj.Volume
+                obj.Volume = 0
+            end
+        end
+
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://" .. customAudioId
+        sound.Volume = 1
+        sound.Looped = true
+        sound.Parent = game:GetService("SoundService")
+        sound:Play()
+        activeCustomSound = sound
+
+        WindUI:Notify({ Title = "Audio Playing", Content = "Custom audio playing locally. Game music muted.", Duration = 4 })
+    end,
+})
+
+ClientTab:Button({
+    Title = "Stop Custom Audio & Restore Game Music",
+    Desc = "Stops custom audio and restores original game sound",
+    Callback = function()
+        if activeCustomSound then
+            activeCustomSound:Stop()
+            activeCustomSound:Destroy()
+            activeCustomSound = nil
+        end
+
+        for sound, vol in pairs(originalVolumes) do
+            if sound and sound.Parent then
+                sound.Volume = vol
+            end
+        end
+        originalVolumes = {}
+
+        WindUI:Notify({ Title = "Audio Stopped", Content = "Custom audio stopped and game music restored.", Duration = 3 })
+    end,
+})
+
+ClientTab:Section({ Title = "Client-Side Morph" })
+
+ClientTab:Input({
+    Title = "Target Username",
+    Desc = "Enter player username to morph into locally",
+    Placeholder = "Username...",
+    Callback = function(text)
+        morphTargetName = text
+    end,
+})
+
+ClientTab:Button({
+    Title = "Morph into Player",
+    Desc = "Locally changes your appearance (only visible to you)",
+    Callback = function()
+        if morphTargetName == "" then
+            WindUI:Notify({ Title = "Error", Content = "Please enter a username first!", Duration = 3 })
+            return
+        end
+
+        task.spawn(function()
+            local successId, targetUserId = pcall(function()
+                return Players:GetUserIdFromNameAsync(morphTargetName)
+            end)
+
+            if not successId or not targetUserId then
+                WindUI:Notify({ Title = "Morph Error", Content = "Could not find user: " .. morphTargetName, Duration = 4 })
+                return
+            end
+
+            local successDesc, humanoidDesc = pcall(function()
+                return Players:GetHumanoidDescriptionFromUserId(targetUserId)
+            end)
+
+            if not successDesc or not humanoidDesc then
+                WindUI:Notify({ Title = "Morph Error", Content = "Failed to load appearance for " .. morphTargetName, Duration = 4 })
+                return
+            end
+
+            local char = Players.LocalPlayer.Character
+            if char and char:FindFirstChildOfClass("Humanoid") then
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                local successApply = pcall(function()
+                    humanoid:ApplyDescription(humanoidDesc)
+                end)
+
+                if successApply then
+                    WindUI:Notify({ Title = "Morph Success", Content = "Locally morphed into " .. morphTargetName .. "!", Duration = 4 })
+                else
+                    WindUI:Notify({ Title = "Morph Error", Content = "Failed to apply description locally.", Duration = 4 })
+                end
+            else
+                WindUI:Notify({ Title = "Morph Error", Content = "Your character or humanoid is missing!", Duration = 4 })
+            end
+        end)
+    end,
+})
+
+-- =============================================================
+--                     4. AUTOMATION TAB
 -- =============================================================
 AutomationTab:Section({ Title = "Anti-Ban Protection" })
 
@@ -848,7 +982,7 @@ AutomationTab:Toggle({
 })
 
 -- =============================================================
---                        4. HOP TAB
+--                        5. HOP TAB
 -- =============================================================
 HopTab:Section({ Title = "Server Hopping Tasks" })
 
@@ -878,7 +1012,7 @@ HopTab:Button({
 })
 
 -- =============================================================
---                        5. TELEPORT TAB
+--                        6. TELEPORT TAB
 -- =============================================================
 TeleportTab:Section({ Title = "Location Teleports" })
 
@@ -910,142 +1044,6 @@ TeleportTab:Button({
     Desc = "Teleports directly to SoccerBall",
     Callback = function()
         TeleportToTarget(workspace:FindFirstChild("SoccerBall", true), "SoccerBall")
-    end,
-})
-
--- =============================================================
---                        6. CLIENT TAB (NEW)
--- =============================================================
-ClientTab:Section({ Title = "Custom Audio Player" })
-
-ClientTab:Input({
-    Title = "Audio ID",
-    Desc = "Enter Roblox Audio ID numbers",
-    Placeholder = "18483545",
-    Callback = function(text)
-        customAudioId = text
-    end,
-})
-
-ClientTab:Button({
-    Title = "Play Custom Audio",
-    Desc = "Plays audio locally and mutes all game music",
-    Callback = function()
-        if customAudioId == "" then
-            WindUI:Notify({ Title = "Error", Content = "Please enter an Audio ID first!", Duration = 3 })
-            return
-        end
-
-        if activeCustomSound then
-            activeCustomSound:Stop()
-            activeCustomSound:Destroy()
-            activeCustomSound = nil
-        end
-
-        -- Mute game sounds
-        originalVolumes = {}
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("Sound") then
-                originalVolumes[obj] = obj.Volume
-                obj.Volume = 0
-            end
-        end
-        for _, obj in pairs(game:GetService("SoundService"):GetDescendants()) do
-            if obj:IsA("Sound") then
-                originalVolumes[obj] = obj.Volume
-                obj.Volume = 0
-            end
-        end
-
-        -- Play custom sound locally
-        local sound = Instance.new("Sound")
-        sound.SoundId = "rbxassetid://" .. customAudioId
-        sound.Volume = 1
-        sound.Looped = true
-        sound.Parent = game:GetService("SoundService")
-        sound:Play()
-        activeCustomSound = sound
-
-        WindUI:Notify({ Title = "Audio Playing", Content = "Custom audio playing locally. Game music muted.", Duration = 4 })
-    end,
-})
-
-ClientTab:Button({
-    Title = "Stop Custom Audio & Restore Game Music",
-    Desc = "Stops custom audio and restores original game sound",
-    Callback = function()
-        if activeCustomSound then
-            activeCustomSound:Stop()
-            activeCustomSound:Destroy()
-            activeCustomSound = nil
-        end
-
-        for sound, vol in pairs(originalVolumes) do
-            if sound and sound.Parent then
-                sound.Volume = vol
-            end
-        end
-        originalVolumes = {}
-
-        WindUI:Notify({ Title = "Audio Stopped", Content = "Custom audio stopped and game music restored.", Duration = 3 })
-    end,
-})
-
-ClientTab:Section({ Title = "Client-Side Morph" })
-
-ClientTab:Input({
-    Title = "Target Username",
-    Desc = "Enter player username to morph into locally",
-    Placeholder = "Username...",
-    Callback = function(text)
-        morphTargetName = text
-    end,
-})
-
-ClientTab:Button({
-    Title = "Morph into Player",
-    Desc = "Locally changes your appearance (only visible to you)",
-    Callback = function()
-        if morphTargetName == "" then
-            WindUI:Notify({ Title = "Error", Content = "Please enter a username first!", Duration = 3 })
-            return
-        end
-
-        task.spawn(function()
-            local successId, targetUserId = pcall(function()
-                return Players:GetUserIdFromNameAsync(morphTargetName)
-            end)
-
-            if not successId or not targetUserId then
-                WindUI:Notify({ Title = "Morph Error", Content = "Could not find user: " .. morphTargetName, Duration = 4 })
-                return
-            end
-
-            local successDesc, humanoidDesc = pcall(function()
-                return Players:GetHumanoidDescriptionFromUserId(targetUserId)
-            end)
-
-            if not successDesc or not humanoidDesc then
-                WindUI:Notify({ Title = "Morph Error", Content = "Failed to load appearance for " .. morphTargetName, Duration = 4 })
-                return
-            end
-
-            local char = Players.LocalPlayer.Character
-            if char and char:FindFirstChildOfClass("Humanoid") then
-                local humanoid = char:FindFirstChildOfClass("Humanoid")
-                local successApply = pcall(function()
-                    humanoid:ApplyDescription(humanoidDesc)
-                end)
-
-                if successApply then
-                    WindUI:Notify({ Title = "Morph Success", Content = "Locally morphed into " .. morphTargetName .. "!", Duration = 4 })
-                else
-                    WindUI:Notify({ Title = "Morph Error", Content = "Failed to apply description locally.", Duration = 4 })
-                end
-            else
-                WindUI:Notify({ Title = "Morph Error", Content = "Your character or humanoid is missing!", Duration = 4 })
-            end
-        end)
     end,
 })
 
