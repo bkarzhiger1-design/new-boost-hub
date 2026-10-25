@@ -51,7 +51,7 @@ local autoChatMessages = {
     "Currently afk. Any given amount will be appreciated!"
 }
 
--- 2. CREATE MAIN WINDOW (Taller height so tabs don't get cut off)
+-- 2. CREATE MAIN WINDOW (WITH DUAL-KEY SUPPORT)
 local Window = WindUI:CreateWindow({
     Title = "Boost Hub",
     SubTitle = "v1.0.0 | made by xeavz",
@@ -68,8 +68,8 @@ local Window = WindUI:CreateWindow({
         end,
     },
     KeySystem = {
-        Key = "KEY_383783828299263", 
-        Note = "Get your key from Linkvertise below!",
+        Key = { "KEY_383783828299263", "KEY_PREMIUM_ONLY_12982" }, 
+        Note = "Get your key from Linkvertise or buy Premium below!",
         URL = "https://link-target.net/10198436/EQPCQ263XIi1", 
         SaveKey = true,
     }
@@ -151,6 +151,20 @@ end
 -- =============================================================
 --                        1. MAIN TAB
 -- =============================================================
+MainTab:Section({ Title = "Hub Updates" })
+
+MainTab:Button({
+    Title = "View Update Log",
+    Desc = "Displays recent hub changes and bug fixes",
+    Callback = function()
+        WindUI:Notify({
+            Title = "Boost Hub - Update Log",
+            Content = "[-] Dual Key System (Linkvertise + Premium Key)\n[-] Added Premium Key Purchase Option\n[-] Fixed Auto Goal (Auto Anchors Character)\n[-] Added Client Tab (Custom Audio & Morph)\n[-] Restored Teleport Tab",
+            Duration = 8
+        })
+    end,
+})
+
 MainTab:Section({ Title = "Player Stats" })
 
 MainTab:Slider({
@@ -589,9 +603,10 @@ FarmTab:Toggle({
     end,
 })
 
+-- AUTO GOAL (FIXED WITH AUTO ANCHORING)
 FarmTab:Toggle({
     Title = "Auto Goal",
-    Desc = "Gently pushes SoccerBall strictly in one straight direction towards the goal",
+    Desc = "Auto anchors character and pushes SoccerBall straight towards goal",
     Value = getgenv().BoostHubConfig.AutoGoal,
     Callback = function(state)
         if state and getgenv().AutoRNG then
@@ -607,37 +622,55 @@ FarmTab:Toggle({
 
         getgenv().AutoGoal = state
         getgenv().BoostHubConfig.AutoGoal = state
-        if state then
-            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-            task.spawn(function()
-                while getgenv().AutoGoal do
-                    local soccerBall = workspace:FindFirstChild("SoccerBall", true)
-                    local char = game.Players.LocalPlayer.Character
+
+        local char = game.Players.LocalPlayer.Character
+        if not state then
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.Anchored = false
+            end
+            return
+        end
+
+        WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        
+        task.spawn(function()
+            while getgenv().AutoGoal do
+                local currentChar = game.Players.LocalPlayer.Character
+                local soccerBall = workspace:FindFirstChild("SoccerBall", true)
+                
+                if soccerBall and currentChar and currentChar:FindFirstChild("HumanoidRootPart") then
+                    local hrp = currentChar.HumanoidRootPart
+                    local ballPart = soccerBall:IsA("BasePart") and soccerBall or soccerBall:FindFirstChildWhichIsA("BasePart", true)
                     
-                    if soccerBall and char and char:FindFirstChild("HumanoidRootPart") then
-                        local ballPart = soccerBall:IsA("BasePart") and soccerBall or soccerBall:FindFirstChildWhichIsA("BasePart", true)
-                        if ballPart then
-                            char.HumanoidRootPart.CFrame = ballPart.CFrame + Vector3.new(0, 2, -3)
-                            if ballPart:IsA("BasePart") then
-                                ballPart.AssemblyLinearVelocity = Vector3.new(0, 5, 35)
-                            end
+                    if ballPart then
+                        hrp.Anchored = true
+                        hrp.CFrame = ballPart.CFrame + Vector3.new(0, 2, -3)
+                        
+                        if ballPart:IsA("BasePart") then
+                            ballPart.AssemblyLinearVelocity = Vector3.new(0, 5, 35)
                         end
                     end
-                    
-                    local waitTime = 1.2
-                    if getgenv().AntiBanEnabled then
-                        waitTime = waitTime + (math.random(1, 5) / 10)
-                    end
-                    task.wait(waitTime)
                 end
-            end)
-            WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal linear pusher activated!", Duration = 3 })
-        end
+                
+                local waitTime = 1.2
+                if getgenv().AntiBanEnabled then
+                    waitTime = waitTime + (math.random(1, 5) / 10)
+                end
+                task.wait(waitTime)
+            end
+
+            local finalChar = game.Players.LocalPlayer.Character
+            if finalChar and finalChar:FindFirstChild("HumanoidRootPart") then
+                finalChar.HumanoidRootPart.Anchored = false
+            end
+        end)
+        
+        WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal activated with auto-anchor!", Duration = 3 })
     end,
 })
 
 -- =============================================================
---                        3. CLIENT TAB (FIXED MORPH & AUDIO)
+--                        3. CLIENT TAB
 -- =============================================================
 ClientTab:Section({ Title = "Custom Audio Player" })
 
@@ -748,7 +781,6 @@ ClientTab:Button({
             end
 
             if targetPlayer and targetPlayer.Character then
-                -- Direct copy method (bulletproof for in-game players)
                 local targetChar = targetPlayer.Character
                 for _, v in pairs(localChar:GetChildren()) do
                     if v:IsA("Accessory") or v:IsA("Clothing") or v:IsA("ShirtGraphic") or v:IsA("BodyColors") then
@@ -778,7 +810,6 @@ ClientTab:Button({
 
                 WindUI:Notify({ Title = "Morph Success", Content = "Locally morphed into " .. targetPlayer.DisplayName .. "!", Duration = 4 })
             else
-                -- Fallback method using UserId description
                 local successId, targetUserId = pcall(function()
                     return Players:GetUserIdFromNameAsync(morphTargetName)
                 end)
@@ -1406,6 +1437,23 @@ SettingsTab:Button({
     end,
 })
 
+SettingsTab:Section({ Title = "Premium Key" })
+
+local PremiumKeyLink = "https://your-link-here" -- Replace with your actual gamepass link when ready
+
+SettingsTab:Button({
+    Title = "Purchase Premium Key",
+    Desc = "A key that never expires",
+    Callback = function()
+        if setclipboard then
+            setclipboard(PremiumKeyLink)
+            WindUI:Notify({ Title = "Link Copied", Content = "Premium key link copied to clipboard!", Duration = 3 })
+        else
+            WindUI:Notify({ Title = "Error", Content = "Your executor does not support setclipboard!", Duration = 3 })
+        end
+    end,
+})
+
 SettingsTab:Section({ Title = "Community & Links" })
 
 local DiscordInvite = "https://discord.gg/v2BxRgTEP"
@@ -1434,17 +1482,6 @@ SettingsTab:Button({
         else
             WindUI:Notify({ Title = "Error", Content = "Failed to copy link.", Duration = 3 })
         end
-    end,
-})
-
-SettingsTab:Section({ Title = "Support Developer" })
-
-SettingsTab:Button({
-    Title = "Donate 5 Robux",
-    Desc = "Opens donation purchase prompt",
-    Callback = function()
-        local DeveloperGamepassID = 00000000
-        game:GetService("MarketplaceService"):PromptGamePassPurchase(game.Players.LocalPlayer, DeveloperGamepassID)
     end,
 })
 
