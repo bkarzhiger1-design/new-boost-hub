@@ -54,7 +54,7 @@ local activeCustomSound = nil
 local originalVolumes = {}
 local morphTargetName = ""
 
--- Auto Chat Spammer Messages List
+-- Adjustable Auto Chat Spammer Messages List (5 Custom Fields)
 local autoChatMessages = {
     "Every robux is appreciated!",
     "Thank for your donations! Goal is 5k",
@@ -174,7 +174,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Added Events tab with Auto Collect Orbs [NEW]\n[-] Translated Auto Cat Click notifications to English\n[-] Added PLS WAIT game verification check",
+            Content = "[-] Renamed Auto Claim Stand to Claim Stand\n[-] Added 5 custom fields to edit Auto Spam Messages\n[-] Events tab & Auto Collect Orbs active",
             Duration = 8
         })
     end,
@@ -963,9 +963,9 @@ AutomationTab:Toggle({
     end,
 })
 
--- AUTO CLAIM STAND (2-SECOND HOLD POSITION)
+-- CLAIM STAND (RENAMED & 2-SECOND HOLD POSITION)
 AutomationTab:Button({
-    Title = "Auto Claim Stand",
+    Title = "Claim Stand",
     Desc = "Scans all ProximityPrompts, teleports to stand, and stays for 2 seconds",
     Callback = function()
         if not getgenv().AntiBanEnabled then
@@ -993,7 +993,7 @@ AutomationTab:Button({
         end
 
         if #prompts == 0 then
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No claimable stand prompts found in workspace!", Duration = 4 })
+            WindUI:Notify({ Title = "Claim Stand", Content = "No claimable stand prompts found in workspace!", Duration = 4 })
             return
         end
 
@@ -1018,7 +1018,7 @@ AutomationTab:Button({
                     hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
                     task.wait(0.5)
 
-                    WindUI:Notify({ Title = "Auto Claim Stand", Content = "Claiming stand! Holding position for 2 seconds...", Duration = 3 })
+                    WindUI:Notify({ Title = "Claim Stand", Content = "Claiming stand! Holding position for 2 seconds...", Duration = 3 })
 
                     if fireproximityprompt then
                         fireproximityprompt(prompt)
@@ -1047,9 +1047,9 @@ AutomationTab:Button({
         hrp.CFrame = originalCFrame
 
         if claimed then
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Successfully claimed stand and returned!", Duration = 3 })
+            WindUI:Notify({ Title = "Claim Stand", Content = "Successfully claimed stand and returned!", Duration = 3 })
         else
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Could not locate a physical part to teleport to!", Duration = 4 })
+            WindUI:Notify({ Title = "Claim Stand", Content = "Could not locate a physical part to teleport to!", Duration = 4 })
         end
     end,
 })
@@ -1162,9 +1162,62 @@ AutomationTab:Toggle({
     end,
 })
 
+-- 5 CUSTOM FIELDS FOR AUTO SPAM MESSAGES
+AutomationTab:Section({ Title = "Custom Auto Spam Messages" })
+
+AutomationTab:Input({
+    Title = "Spam Message 1",
+    Desc = "Edit spam message #1",
+    Placeholder = "Enter message...",
+    Value = autoChatMessages[1],
+    Callback = function(text)
+        if text ~= "" then autoChatMessages[1] = text end
+    end,
+})
+
+AutomationTab:Input({
+    Title = "Spam Message 2",
+    Desc = "Edit spam message #2",
+    Placeholder = "Enter message...",
+    Value = autoChatMessages[2],
+    Callback = function(text)
+        if text ~= "" then autoChatMessages[2] = text end
+    end,
+})
+
+AutomationTab:Input({
+    Title = "Spam Message 3",
+    Desc = "Edit spam message #3",
+    Placeholder = "Enter message...",
+    Value = autoChatMessages[3],
+    Callback = function(text)
+        if text ~= "" then autoChatMessages[3] = text end
+    end,
+})
+
+AutomationTab:Input({
+    Title = "Spam Message 4",
+    Desc = "Edit spam message #4",
+    Placeholder = "Enter message...",
+    Value = autoChatMessages[4],
+    Callback = function(text)
+        if text ~= "" then autoChatMessages[4] = text end
+    end,
+})
+
+AutomationTab:Input({
+    Title = "Spam Message 5",
+    Desc = "Edit spam message #5",
+    Placeholder = "Enter message...",
+    Value = autoChatMessages[5],
+    Callback = function(text)
+        if text ~= "" then autoChatMessages[5] = text end
+    end,
+})
+
 AutomationTab:Toggle({
     Title = "Auto Chat Spammer",
-    Desc = "Sends a random begging message in game chat every 15 seconds",
+    Desc = "Sends a random custom message from your 5 fields every 15 seconds",
     Value = getgenv().BoostHubConfig.AutoChatSpam,
     Callback = function(state)
         getgenv().AutoChatSpam = state
@@ -1175,9 +1228,17 @@ AutomationTab:Toggle({
             end
             task.spawn(function()
                 while getgenv().AutoChatSpam do
-                    local randomIndex = math.random(1, #autoChatMessages)
-                    local selectedMsg = autoChatMessages[randomIndex]
-                    SendChatMessage(selectedMsg)
+                    local activeMessages = {}
+                    for _, msg in ipairs(autoChatMessages) do
+                        if msg and msg ~= "" then
+                            table.insert(activeMessages, msg)
+                        end
+                    end
+                    
+                    if #activeMessages > 0 then
+                        local randomIndex = math.random(1, #activeMessages)
+                        SendChatMessage(activeMessages[randomIndex])
+                    end
                     
                     local waitTime = 15
                     if getgenv().AntiBanEnabled then
