@@ -74,6 +74,7 @@ local MainTab = Window:Tab({ Title = "Main", Icon = "house" })
 local FarmTab = Window:Tab({ Title = "Farm", Icon = "zap" })
 local AutomationTab = Window:Tab({ Title = "Automation", Icon = "bot" })
 local HopTab = Window:Tab({ Title = "Hop", Icon = "refresh-cw" })
+local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local ConfigureTab = Window:Tab({ Title = "Configure", Icon = "palette" })
 local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
@@ -886,7 +887,45 @@ HopTab:Button({
 })
 
 -- =============================================================
---                      5. VISUAL TAB
+--                        5. TELEPORT TAB
+-- =============================================================
+TeleportTab:Section({ Title = "Location Teleports" })
+
+local function TeleportToTarget(targetObj, displayName)
+    WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+    local char = game.Players.LocalPlayer.Character
+    if targetObj and char and char:FindFirstChild("HumanoidRootPart") then
+        if targetObj:IsA("Model") then
+            char.HumanoidRootPart.CFrame = targetObj:GetPivot() + Vector3.new(0, 3, 0)
+        elseif targetObj:IsA("BasePart") then
+            char.HumanoidRootPart.CFrame = targetObj.CFrame + Vector3.new(0, 3, 0)
+        end
+        WindUI:Notify({ Title = "Teleported", Content = "Teleported to " .. displayName, Duration = 3 })
+    else
+        WindUI:Notify({ Title = "Error", Content = displayName .. " target not found!", Duration = 3 })
+    end
+end
+
+-- Teleport To RNG Button
+TeleportTab:Button({
+    Title = "Teleport To RNG",
+    Desc = "Teleports directly to RNGButton",
+    Callback = function()
+        TeleportToTarget(workspace:FindFirstChild("RNGButton", true), "RNGButton")
+    end,
+})
+
+-- Teleport To SoccerBall Button
+TeleportTab:Button({
+    Title = "Teleport To SoccerBall",
+    Desc = "Teleports directly to SoccerBall",
+    Callback = function()
+        TeleportToTarget(workspace:FindFirstChild("SoccerBall", true), "SoccerBall")
+    end,
+})
+
+-- =============================================================
+--                      6. VISUAL TAB
 -- =============================================================
 VisualTab:Section({ Title = "Performance & Graphics" })
 
@@ -1077,7 +1116,7 @@ VisualTab:Button({
 })
 
 -- =============================================================
---                    6. CONFIGURE TAB
+--                    7. CONFIGURE TAB
 -- =============================================================
 ConfigureTab:Section({ Title = "Saved Configurations & Auto Execute" })
 
@@ -1123,7 +1162,6 @@ ConfigureTab:Button({
 
 ConfigureTab:Section({ Title = "Server Leaderboard Stats" })
 
--- Who Is The Richest On Server Button (Fixed to accurately compare actual leaderboard values)
 ConfigureTab:Button({
     Title = "Who Is The Richest On Server?",
     Desc = "Scans server leaderboard stats to find the player with the highest raised stats",
@@ -1191,7 +1229,7 @@ ConfigureTab:Toggle({
 })
 
 -- =============================================================
---                      7. SETTINGS TAB
+--                      8. SETTINGS TAB
 -- =============================================================
 SettingsTab:Section({ Title = "Developer Info" })
 
