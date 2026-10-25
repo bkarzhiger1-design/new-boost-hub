@@ -69,7 +69,7 @@ local Window = WindUI:CreateWindow({
     },
     KeySystem = {
         Key = { "KEY_383783828299263", "KEY_PREMIUM_ONLY_12982" }, 
-        Note = "Get your key from Linkvertise or buy Premium below!",
+        Note = "Get your key from Linkvertise or use testing keys!",
         URL = "https://link-target.net/10198436/EQPCQ263XIi1", 
         SaveKey = true,
     }
@@ -161,7 +161,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Fixed UI Themes dropdown & engine integration\n[-] Added Normal Server Hop and Small Server Hop\n[-] Removed non-functional Richest Player button\n[-] Ban Warnings only show when Anti-Ban Safe Mode is OFF",
+            Content = "[-] Restored window subtitle (v1.0.0 | made by xeavz)\n[-] Added Normal Server Hop and Small Server Hop\n[-] Fixed UI Themes & Ban Warnings",
             Duration = 8
         })
     end,
@@ -1574,23 +1574,6 @@ SettingsTab:Button({
     Desc = "Script Maker | UI Developer",
     Callback = function()
         WindUI:Notify({ Title = "Boost Hub", Content = "Thanks for using Boost Hub by Xeavz!", Duration = 3 })
-    end,
-})
-
-SettingsTab:Section({ Title = "Premium Key" })
-
-local PremiumKeyLink = "https://your-link-here" -- Replace with your actual gamepass link when ready
-
-SettingsTab:Button({
-    Title = "Purchase Premium Key",
-    Desc = "A key that never expires",
-    Callback = function()
-        if setclipboard then
-            setclipboard(PremiumKeyLink)
-            WindUI:Notify({ Title = "Link Copied", Content = "Premium key link copied to clipboard!", Duration = 3 })
-        else
-            WindUI:Notify({ Title = "Error", Content = "Your executor does not support setclipboard!", Duration = 3 })
-        end
     end,
 })
 
