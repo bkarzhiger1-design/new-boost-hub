@@ -160,7 +160,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Fixed Auto Claim Stand timing (Holds prompt for minimum 5 seconds)\n[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)\n[-] Fixed Auto Goal (Auto Anchors Character)\n[-] Added Client Tab (Custom Audio & Morph)",
+            Content = "[-] Added Instant Proximity Prompts feature\n[-] Forced minimum 5-second stay on Auto Claim Stand\n[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)\n[-] Fixed Auto Goal (Auto Anchors Character)",
             Duration = 8
         })
     end,
@@ -862,10 +862,41 @@ AutomationTab:Toggle({
 
 AutomationTab:Section({ Title = "Stand & Begging Tasks" })
 
--- FIXED AUTO CLAIM STAND (STAYS AT STAND FOR MINIMUM 5 SECONDS TO FINISH PROMPT)
+-- INSTANT PROXIMITY PROMPT TOGGLE
+local instantPromptConn = nil
+AutomationTab:Toggle({
+    Title = "Instant Proximity Prompts",
+    Desc = "Sets all ProximityPrompt HoldDuration to 0 for instant triggering",
+    Value = false,
+    Callback = function(state)
+        if state then
+            -- Make existing prompts instant
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if obj:IsA("ProximityPrompt") then
+                    obj.HoldDuration = 0
+                end
+            end
+            -- Listen for newly spawned prompts
+            instantPromptConn = workspace.DescendantAdded:Connect(function(child)
+                if child:IsA("ProximityPrompt") then
+                    child.HoldDuration = 0
+                end
+            end)
+            WindUI:Notify({ Title = "Instant Prompts", Content = "Proximity Prompts are now instant!", Duration = 3 })
+        else
+            if instantPromptConn then
+                instantPromptConn:Disconnect()
+                instantPromptConn = nil
+            end
+            WindUI:Notify({ Title = "Instant Prompts", Content = "Instant Prompts disabled.", Duration = 3 })
+        end
+    end,
+})
+
+-- STRICT 5-SECOND STAY AUTO CLAIM STAND (SKIPS SHOP STANDS IF NO UNCLAIMED PROMPT)
 AutomationTab:Button({
     Title = "Auto Claim Stand",
-    Desc = "Teleports to BaseEmitter, holds prompt for 5+ sec, and returns",
+    Desc = "Teleports to BaseEmitter, stays for 5+ sec on unclaimed stand, and returns",
     Callback = function()
         WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
 
@@ -898,35 +929,33 @@ AutomationTab:Button({
         local claimed = false
         for _, emitter in ipairs(emitters) do
             if emitter and emitter.Parent then
-                -- Teleport to current emitter
-                hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
-                task.wait(0.5)
-
-                -- Check for proximity prompt in parents or descendants near this emitter
+                -- Check if this BaseEmitter actually has an unclaimed ProximityPrompt nearby (skips shops/claimed stands)
                 local prompt = emitter:FindFirstChildWhichIsA("ProximityPrompt", true)
                 if not prompt and emitter.Parent then
                     prompt = emitter.Parent:FindFirstChildWhichIsA("ProximityPrompt", true)
                 end
 
+                -- If it has a valid prompt, that means it's a claimable player stand!
                 if prompt and prompt.Enabled then
-                    WindUI:Notify({ Title = "Auto Claim Stand", Content = "Found unclaimed Stand! Holding prompt...", Duration = 3 })
+                    -- Teleport to the stand
+                    hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
+                    task.wait(0.5)
 
-                    -- Hold prompt and wait for at least 5 seconds
-                    local holdDuration = prompt.HoldDuration > 0 and prompt.HoldDuration or 1
-                    
+                    WindUI:Notify({ Title = "Auto Claim Stand", Content = "Found unclaimed stand! Staying for 5 seconds...", Duration = 3 })
+
                     if fireproximityprompt then
                         fireproximityprompt(prompt)
+                    else
+                        prompt:InputHoldBegin()
+                        task.wait(prompt.HoldDuration > 0 and prompt.HoldDuration or 0.1)
+                        prompt:InputHoldEnd()
                     end
-                    
-                    prompt:InputHoldBegin()
-                    task.wait(math.max(holdDuration + 0.5, 5)) -- Ensure minimum 5 seconds stay
-                    prompt:InputHoldEnd()
+
+                    -- STRICTLY stay at this stand for a minimum of 5 seconds
+                    task.wait(5.0)
 
                     claimed = true
                     break
-                else
-                    -- No prompt found here, skip to next BaseEmitter
-                    task.wait(0.2)
                 end
             end
         end
@@ -935,9 +964,9 @@ AutomationTab:Button({
         hrp.CFrame = originalCFrame
 
         if claimed then
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Successfully claimed Stand and returned!", Duration = 3 })
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Successfully claimed stand and returned!", Duration = 3 })
         else
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Checked all BaseEmitters, but no unclaimed Stand was found!", Duration = 4 })
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No available player stands found right now!", Duration = 4 })
         end
     end,
 })
