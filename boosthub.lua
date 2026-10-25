@@ -160,7 +160,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Reverted to universal BaseEmitter stand scan\n[-] Forced strict 5-second stay on Auto Claim Stand\n[-] Added Instant Proximity Prompts\n[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)",
+            Content = "[-] Fixed Auto Claim Stand to scan workspace ProximityPrompts directly\n[-] Forced strict 5-second hold position on stands\n[-] Added Instant Proximity Prompts\n[-] Dual Key System (Linkvertise + Premium Key)",
             Duration = 8
         })
     end,
@@ -891,10 +891,10 @@ AutomationTab:Toggle({
     end,
 })
 
--- OLD-STYLE UNIVERSAL AUTO CLAIM STAND WITH 5-SECOND HOLD POSITION
+-- FIXED AUTO CLAIM STAND (SCANS WORKSPACE PROXIMITY PROMPTS DIRECTLY & HOLDS POSITION FOR 5s)
 AutomationTab:Button({
     Title = "Auto Claim Stand",
-    Desc = "Teleports to BaseEmitter, claims stand, and stays for 5 seconds",
+    Desc = "Scans all ProximityPrompts, teleports to stand, and stays for 5 seconds",
     Callback = function()
         WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
 
@@ -905,36 +905,43 @@ AutomationTab:Button({
         local hrp = char.HumanoidRootPart
         local originalCFrame = hrp.CFrame
 
-        -- Gather all BaseEmitter parts universally
-        local emitters = {}
+        -- Gather all valid ProximityPrompts across the workspace
+        local prompts = {}
         for _, obj in pairs(workspace:GetDescendants()) do
-            if obj.Name == "BaseEmitter" and obj:IsA("BasePart") then
-                table.insert(emitters, obj)
+            if obj:IsA("ProximityPrompt") and obj.Enabled then
+                local actionText = string.lower(obj.ActionText or "")
+                local objectText = string.lower(obj.ObjectText or "")
+                -- Target prompts that have to do with claiming or stands
+                if string.find(actionText, "claim") or string.find(objectText, "claim") or string.find(actionText, "stand") or string.find(objectText, "stand") then
+                    table.insert(prompts, obj)
+                end
             end
         end
 
-        if #emitters == 0 then
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No BaseEmitter parts found in workspace!", Duration = 4 })
+        if #prompts == 0 then
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No claimable stand prompts found in workspace!", Duration = 4 })
             return
         end
 
-        -- Shuffle emitters randomly
-        for i = #emitters, 2, -1 do
+        -- Shuffle prompts randomly
+        for i = #prompts, 2, -1 do
             local j = math.random(1, i)
-            emitters[i], emitters[j] = emitters[j], emitters[i]
+            prompts[i], prompts[j] = prompts[j], prompts[i]
         end
 
         local claimed = false
-        for _, emitter in ipairs(emitters) do
-            if emitter and emitter.Parent then
-                local prompt = emitter:FindFirstChildWhichIsA("ProximityPrompt", true)
-                if not prompt and emitter.Parent then
-                    prompt = emitter.Parent:FindFirstChildWhichIsA("ProximityPrompt", true)
+        for _, prompt in ipairs(prompts) do
+            if prompt and prompt.Parent then
+                local targetPart = nil
+                if prompt.Parent:IsA("BasePart") then
+                    targetPart = prompt.Parent
+                elseif prompt.Parent:IsA("Model") then
+                    targetPart = prompt.Parent.PrimaryPart or prompt.Parent:FindFirstChildWhichIsA("BasePart")
                 end
 
-                if prompt and prompt.Enabled then
-                    -- Teleport to the emitter
-                    hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
+                if targetPart then
+                    -- Teleport to the stand part
+                    hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
                     task.wait(0.5)
 
                     WindUI:Notify({ Title = "Auto Claim Stand", Content = "Claiming stand! Holding position for 5 seconds...", Duration = 4 })
@@ -950,8 +957,8 @@ AutomationTab:Button({
                     -- Lock character position for a strict 5 seconds
                     local startTime = tick()
                     while tick() - startTime < 5 do
-                        if hrp and emitter then
-                            hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
+                        if hrp and targetPart then
+                            hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
                         end
                         task.wait(0.2)
                     end
@@ -968,7 +975,7 @@ AutomationTab:Button({
         if claimed then
             WindUI:Notify({ Title = "Auto Claim Stand", Content = "Successfully claimed stand and returned!", Duration = 3 })
         else
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Checked all BaseEmitters, but no prompt was found!", Duration = 4 })
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Could not locate a physical part to teleport to!", Duration = 4 })
         end
     end,
 })
