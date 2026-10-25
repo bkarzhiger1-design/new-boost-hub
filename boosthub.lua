@@ -36,6 +36,12 @@ local textGenColor = "#ff0000"
 local textGenStrokeColor = "#000000"
 local textGenThickness = 1
 
+-- Client Audio Player & Morph Variables
+local customAudioId = ""
+local activeCustomSound = nil
+local originalVolumes = {}
+local morphTargetName = ""
+
 -- Auto Chat Spammer Messages List
 local autoChatMessages = {
     "Every robux is appreciated!",
@@ -75,11 +81,12 @@ local FarmTab = Window:Tab({ Title = "Farm", Icon = "zap" })
 local AutomationTab = Window:Tab({ Title = "Automation", Icon = "bot" })
 local HopTab = Window:Tab({ Title = "Hop", Icon = "refresh-cw" })
 local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
+local ClientTab = Window:Tab({ Title = "Client", Icon = "user" })
 local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local ConfigureTab = Window:Tab({ Title = "Configure", Icon = "palette" })
 local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
 
--- Helper Services for Server Hopping
+-- Helper Services for Server Hopping & Client Features
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 
@@ -146,7 +153,6 @@ end
 -- =============================================================
 MainTab:Section({ Title = "Player Stats" })
 
--- WalkSpeed Slider
 MainTab:Slider({
     Title = "Walk Speed",
     Value = { Min = 16, Max = 300, Default = 16 },
@@ -161,7 +167,6 @@ MainTab:Slider({
     end,
 })
 
--- JumpPower Slider
 MainTab:Slider({
     Title = "Jump Power",
     Value = { Min = 50, Max = 400, Default = 50 },
@@ -179,7 +184,6 @@ MainTab:Slider({
 
 MainTab:Section({ Title = "Performance Settings" })
 
--- Disable 3D Render Toggle
 MainTab:Toggle({
     Title = "Disable 3D Render",
     Desc = "Pauses 3D rendering completely for max performance/FPS while AFK",
@@ -197,7 +201,6 @@ MainTab:Toggle({
 
 MainTab:Section({ Title = "Movement Abilities" })
 
--- Universal Fly Toggle (PC & Mobile Compatible)
 local flying = false
 local flySpeed = 50
 local bodyVel, bodyGyro
@@ -273,7 +276,6 @@ MainTab:Toggle({
     end,
 })
 
--- Infinite Jump Toggle
 local infiniteJump = false
 MainTab:Toggle({
     Title = "Infinite Jump",
@@ -296,7 +298,6 @@ game:GetService("UserInputService").JumpRequest:Connect(function()
     end
 end)
 
--- Noclip Toggle
 local noclip = false
 MainTab:Toggle({
     Title = "Noclip",
@@ -323,7 +324,6 @@ game:GetService("RunService").Stepped:Connect(function()
     end
 end)
 
--- Anchor Character Toggle
 MainTab:Toggle({
     Title = "Anchor Character",
     Desc = "Freezes your character in place",
@@ -336,7 +336,6 @@ MainTab:Toggle({
     end,
 })
 
--- Invisible Toggle
 local invisSavedTransparencies = {}
 MainTab:Toggle({
     Title = "Invisible",
@@ -371,7 +370,6 @@ MainTab:Toggle({
 
 MainTab:Section({ Title = "Protection & Player Tools" })
 
--- Anti AFK
 local antiAfkConnection
 MainTab:Toggle({
     Title = "Anti AFK",
@@ -394,7 +392,6 @@ MainTab:Toggle({
     end,
 })
 
--- Anti Fling
 local antiFlingConnection
 MainTab:Toggle({
     Title = "Anti Fling",
@@ -421,7 +418,6 @@ MainTab:Toggle({
     end,
 })
 
--- Teleport To Player
 local targetPlayerName = ""
 MainTab:Input({
     Title = "Target Player",
@@ -469,7 +465,6 @@ MainTab:Button({
 -- =============================================================
 FarmTab:Section({ Title = "Automation Delays" })
 
--- Adjust Delay Of Click (100 ms to 10000 ms)
 FarmTab:Slider({
     Title = "Adjust Delay Of Click (Ms)",
     Value = { Min = 100, Max = 10000, Default = getgenv().BoostHubConfig.CatClickDelay },
@@ -479,7 +474,6 @@ FarmTab:Slider({
     end,
 })
 
--- Adjust Delay For Auto RNG (5 Seconds to 50 Seconds)
 FarmTab:Slider({
     Title = "Adjust Delay For Auto RNG (Sec)",
     Value = { Min = 5, Max = 50, Default = getgenv().BoostHubConfig.RNGDelay },
@@ -523,7 +517,6 @@ local function loop(alvo)
     end
 end
 
--- Auto Cat Click Toggle
 FarmTab:Toggle({
     Title = "Auto Cat Click",
     Desc = "Automatically searches and clicks targets using ClickDetector scanner",
@@ -548,7 +541,6 @@ FarmTab:Toggle({
     end,
 })
 
--- Auto RNG Toggle
 FarmTab:Toggle({
     Title = "Auto RNG",
     Desc = "Teleports to 'RNGButton' based on set delay",
@@ -597,7 +589,6 @@ FarmTab:Toggle({
     end,
 })
 
--- Auto Goal Toggle
 FarmTab:Toggle({
     Title = "Auto Goal",
     Desc = "Gently pushes SoccerBall strictly in one straight direction towards the goal",
@@ -906,7 +897,6 @@ local function TeleportToTarget(targetObj, displayName)
     end
 end
 
--- Teleport To RNG Button
 TeleportTab:Button({
     Title = "Teleport To RNG",
     Desc = "Teleports directly to RNGButton",
@@ -915,7 +905,6 @@ TeleportTab:Button({
     end,
 })
 
--- Teleport To SoccerBall Button
 TeleportTab:Button({
     Title = "Teleport To SoccerBall",
     Desc = "Teleports directly to SoccerBall",
@@ -925,7 +914,143 @@ TeleportTab:Button({
 })
 
 -- =============================================================
---                      6. VISUAL TAB
+--                        6. CLIENT TAB (NEW)
+-- =============================================================
+ClientTab:Section({ Title = "Custom Audio Player" })
+
+ClientTab:Input({
+    Title = "Audio ID",
+    Desc = "Enter Roblox Audio ID numbers",
+    Placeholder = "18483545",
+    Callback = function(text)
+        customAudioId = text
+    end,
+})
+
+ClientTab:Button({
+    Title = "Play Custom Audio",
+    Desc = "Plays audio locally and mutes all game music",
+    Callback = function()
+        if customAudioId == "" then
+            WindUI:Notify({ Title = "Error", Content = "Please enter an Audio ID first!", Duration = 3 })
+            return
+        end
+
+        if activeCustomSound then
+            activeCustomSound:Stop()
+            activeCustomSound:Destroy()
+            activeCustomSound = nil
+        end
+
+        -- Mute game sounds
+        originalVolumes = {}
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Sound") then
+                originalVolumes[obj] = obj.Volume
+                obj.Volume = 0
+            end
+        end
+        for _, obj in pairs(game:GetService("SoundService"):GetDescendants()) do
+            if obj:IsA("Sound") then
+                originalVolumes[obj] = obj.Volume
+                obj.Volume = 0
+            end
+        end
+
+        -- Play custom sound locally
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://" .. customAudioId
+        sound.Volume = 1
+        sound.Looped = true
+        sound.Parent = game:GetService("SoundService")
+        sound:Play()
+        activeCustomSound = sound
+
+        WindUI:Notify({ Title = "Audio Playing", Content = "Custom audio playing locally. Game music muted.", Duration = 4 })
+    end,
+})
+
+ClientTab:Button({
+    Title = "Stop Custom Audio & Restore Game Music",
+    Desc = "Stops custom audio and restores original game sound",
+    Callback = function()
+        if activeCustomSound then
+            activeCustomSound:Stop()
+            activeCustomSound:Destroy()
+            activeCustomSound = nil
+        end
+
+        for sound, vol in pairs(originalVolumes) do
+            if sound and sound.Parent then
+                sound.Volume = vol
+            end
+        end
+        originalVolumes = {}
+
+        WindUI:Notify({ Title = "Audio Stopped", Content = "Custom audio stopped and game music restored.", Duration = 3 })
+    end,
+})
+
+ClientTab:Section({ Title = "Client-Side Morph" })
+
+ClientTab:Input({
+    Title = "Target Username",
+    Desc = "Enter player username to morph into locally",
+    Placeholder = "Username...",
+    Callback = function(text)
+        morphTargetName = text
+    end,
+})
+
+ClientTab:Button({
+    Title = "Morph into Player",
+    Desc = "Locally changes your appearance (only visible to you)",
+    Callback = function()
+        if morphTargetName == "" then
+            WindUI:Notify({ Title = "Error", Content = "Please enter a username first!", Duration = 3 })
+            return
+        end
+
+        task.spawn(function()
+            local successId, targetUserId = pcall(function()
+                return Players:GetUserIdFromNameAsync(morphTargetName)
+            end)
+
+            if not successId or not targetUserId then
+                WindUI:Notify({ Title = "Morph Error", Content = "Could not find user: " .. morphTargetName, Duration = 4 })
+                return
+            end
+
+            local successDesc, humanoidDesc = pcall(function()
+                return Players:GetHumanoidDescriptionFromUserId(targetUserId)
+            end)
+
+            if not successDesc or not humanoidDesc then
+                WindUI:Notify({ Title = "Morph Error", Content = "Failed to load appearance for " .. morphTargetName, Duration = 4 })
+                return
+            end
+
+            local char = Players.LocalPlayer.Character
+            if char and char:FindFirstChildOfClass("Humanoid") then
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                local successApply = pcall(function()
+                    humanoid:ApplyDescription(humanoidDesc)
+                end)
+
+                if successApply then
+                    WindUI:Notify({ Title = "Morph Success", Content = "Locally morphed into " .. morphTargetName .. "!", Duration = 4 })
+                else
+                    WindUI:Notify({ Title = "Morph Error", Content = "Failed to apply description locally.", Duration = 4 })
+                end
+            else
+                WindUI:Notify({ Title = "Morph Error", Content = "Your character or humanoid is missing!", Duration = 4 })
+            end
+        end)
+    end,
+})
+
+-- =============================================================
+--                      7. VISUAL TAB
 -- =============================================================
 VisualTab:Section({ Title = "Performance & Graphics" })
 
@@ -1116,7 +1241,7 @@ VisualTab:Button({
 })
 
 -- =============================================================
---                    7. CONFIGURE TAB
+--                    8. CONFIGURE TAB
 -- =============================================================
 ConfigureTab:Section({ Title = "Saved Configurations & Auto Execute" })
 
@@ -1229,7 +1354,7 @@ ConfigureTab:Toggle({
 })
 
 -- =============================================================
---                      8. SETTINGS TAB
+--                      9. SETTINGS TAB
 -- =============================================================
 SettingsTab:Section({ Title = "Developer Info" })
 
