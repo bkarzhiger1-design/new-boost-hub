@@ -160,7 +160,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Reworked Auto Claim Stand (Uses BaseEmitter & Proximity Check)\n[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)\n[-] Fixed Auto Goal (Auto Anchors Character)\n[-] Added Client Tab (Custom Audio & Morph)",
+            Content = "[-] Fixed Auto Claim Stand timing (Holds prompt for minimum 5 seconds)\n[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)\n[-] Fixed Auto Goal (Auto Anchors Character)\n[-] Added Client Tab (Custom Audio & Morph)",
             Duration = 8
         })
     end,
@@ -862,10 +862,10 @@ AutomationTab:Toggle({
 
 AutomationTab:Section({ Title = "Stand & Begging Tasks" })
 
--- REWORKED AUTO CLAIM STAND (BASEEMITTER + PROXIMITY CHECK + SKIP LOGIC)
+-- FIXED AUTO CLAIM STAND (STAYS AT STAND FOR MINIMUM 5 SECONDS TO FINISH PROMPT)
 AutomationTab:Button({
     Title = "Auto Claim Stand",
-    Desc = "Teleports to random BaseEmitter, checks for ProximityPrompt, and returns",
+    Desc = "Teleports to BaseEmitter, holds prompt for 5+ sec, and returns",
     Callback = function()
         WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
 
@@ -900,33 +900,33 @@ AutomationTab:Button({
             if emitter and emitter.Parent then
                 -- Teleport to current emitter
                 hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
-                task.wait(0.4)
+                task.wait(0.5)
 
                 -- Check for proximity prompt in parents or descendants near this emitter
-                local prompt = nil
-                -- Check inside the emitter itself or its parent
-                prompt = emitter:FindFirstChildWhichIsA("ProximityPrompt", true)
+                local prompt = emitter:FindFirstChildWhichIsA("ProximityPrompt", true)
                 if not prompt and emitter.Parent then
                     prompt = emitter.Parent:FindFirstChildWhichIsA("ProximityPrompt", true)
                 end
 
-                if prompt then
-                    -- Found prompt! Trigger/Hold it
+                if prompt and prompt.Enabled then
+                    WindUI:Notify({ Title = "Auto Claim Stand", Content = "Found unclaimed Stand! Holding prompt...", Duration = 3 })
+
+                    -- Hold prompt and wait for at least 5 seconds
+                    local holdDuration = prompt.HoldDuration > 0 and prompt.HoldDuration or 1
+                    
                     if fireproximityprompt then
                         fireproximityprompt(prompt)
-                    else
-                        -- Fallback simulation if fireproximityprompt isn't available
-                        prompt:InputHoldBegin()
-                        task.wait(prompt.HoldDuration + 0.1)
-                        prompt:InputHoldEnd()
                     end
                     
-                    task.wait(0.5)
+                    prompt:InputHoldBegin()
+                    task.wait(math.max(holdDuration + 0.5, 5)) -- Ensure minimum 5 seconds stay
+                    prompt:InputHoldEnd()
+
                     claimed = true
                     break
                 else
-                    -- No prompt found here, continue loop to try another BaseEmitter
-                    task.wait(0.1)
+                    -- No prompt found here, skip to next BaseEmitter
+                    task.wait(0.2)
                 end
             end
         end
@@ -935,9 +935,9 @@ AutomationTab:Button({
         hrp.CFrame = originalCFrame
 
         if claimed then
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Successfully claimed a Stand and returned!", Duration = 3 })
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Successfully claimed Stand and returned!", Duration = 3 })
         else
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Checked all BaseEmitters, but no unclaimed Stand prompt was found!", Duration = 4 })
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Checked all BaseEmitters, but no unclaimed Stand was found!", Duration = 4 })
         end
     end,
 })
