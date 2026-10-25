@@ -160,7 +160,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Added Instant Proximity Prompts feature\n[-] Forced minimum 5-second stay on Auto Claim Stand\n[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)\n[-] Fixed Auto Goal (Auto Anchors Character)",
+            Content = "[-] Fixed Auto Claim Stand (Filters shop stands & forces strict 5s hold)\n[-] Added Instant Proximity Prompts\n[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)\n[-] Fixed Auto Goal (Auto Anchors Character)",
             Duration = 8
         })
     end,
@@ -870,13 +870,11 @@ AutomationTab:Toggle({
     Value = false,
     Callback = function(state)
         if state then
-            -- Make existing prompts instant
             for _, obj in pairs(workspace:GetDescendants()) do
                 if obj:IsA("ProximityPrompt") then
                     obj.HoldDuration = 0
                 end
             end
-            -- Listen for newly spawned prompts
             instantPromptConn = workspace.DescendantAdded:Connect(function(child)
                 if child:IsA("ProximityPrompt") then
                     child.HoldDuration = 0
@@ -893,10 +891,10 @@ AutomationTab:Toggle({
     end,
 })
 
--- STRICT 5-SECOND STAY AUTO CLAIM STAND (SKIPS SHOP STANDS IF NO UNCLAIMED PROMPT)
+-- REWORKED & FIXED AUTO CLAIM STAND (FILTERS SHOP STANDS & LOCKS POSITION FOR 5s)
 AutomationTab:Button({
     Title = "Auto Claim Stand",
-    Desc = "Teleports to BaseEmitter, stays for 5+ sec on unclaimed stand, and returns",
+    Desc = "Teleports to player stands, claims them, and stays for 5 seconds",
     Callback = function()
         WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
 
@@ -907,16 +905,19 @@ AutomationTab:Button({
         local hrp = char.HumanoidRootPart
         local originalCFrame = hrp.CFrame
 
-        -- Gather all BaseEmitter parts
+        -- Gather valid BaseEmitter parts, filtering out shops
         local emitters = {}
         for _, obj in pairs(workspace:GetDescendants()) do
             if obj.Name == "BaseEmitter" and obj:IsA("BasePart") then
-                table.insert(emitters, obj)
+                local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
+                if not string.find(parentName, "shop") and not string.find(parentName, "gear") then
+                    table.insert(emitters, obj)
+                end
             end
         end
 
         if #emitters == 0 then
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No BaseEmitter parts found in workspace!", Duration = 4 })
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No valid player stands found!", Duration = 4 })
             return
         end
 
@@ -929,33 +930,42 @@ AutomationTab:Button({
         local claimed = false
         for _, emitter in ipairs(emitters) do
             if emitter and emitter.Parent then
-                -- Check if this BaseEmitter actually has an unclaimed ProximityPrompt nearby (skips shops/claimed stands)
                 local prompt = emitter:FindFirstChildWhichIsA("ProximityPrompt", true)
                 if not prompt and emitter.Parent then
                     prompt = emitter.Parent:FindFirstChildWhichIsA("ProximityPrompt", true)
                 end
 
-                -- If it has a valid prompt, that means it's a claimable player stand!
                 if prompt and prompt.Enabled then
-                    -- Teleport to the stand
-                    hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
-                    task.wait(0.5)
+                    local actionText = string.lower(prompt.ActionText or "")
+                    local objectText = string.lower(prompt.ObjectText or "")
+                    
+                    if string.find(actionText, "claim") or string.find(objectText, "claim") or string.find(actionText, "stand") then
+                        -- Teleport to the valid player stand
+                        hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
+                        task.wait(0.5)
 
-                    WindUI:Notify({ Title = "Auto Claim Stand", Content = "Found unclaimed stand! Staying for 5 seconds...", Duration = 3 })
+                        WindUI:Notify({ Title = "Auto Claim Stand", Content = "Claiming stand! Holding position for 5 seconds...", Duration = 4 })
 
-                    if fireproximityprompt then
-                        fireproximityprompt(prompt)
-                    else
-                        prompt:InputHoldBegin()
-                        task.wait(prompt.HoldDuration > 0 and prompt.HoldDuration or 0.1)
-                        prompt:InputHoldEnd()
+                        if fireproximityprompt then
+                            fireproximityprompt(prompt)
+                        else
+                            prompt:InputHoldBegin()
+                            task.wait(0.1)
+                            prompt:InputHoldEnd()
+                        end
+
+                        -- Lock character position for a strict 5 seconds
+                        local startTime = tick()
+                        while tick() - startTime < 5 do
+                            if hrp and emitter then
+                                hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
+                            end
+                            task.wait(0.2)
+                        end
+
+                        claimed = true
+                        break
                     end
-
-                    -- STRICTLY stay at this stand for a minimum of 5 seconds
-                    task.wait(5.0)
-
-                    claimed = true
-                    break
                 end
             end
         end
@@ -966,7 +976,7 @@ AutomationTab:Button({
         if claimed then
             WindUI:Notify({ Title = "Auto Claim Stand", Content = "Successfully claimed stand and returned!", Duration = 3 })
         else
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No available player stands found right now!", Duration = 4 })
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No unclaimed player stands available right now!", Duration = 4 })
         end
     end,
 })
