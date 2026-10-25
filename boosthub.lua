@@ -75,7 +75,7 @@ local Window = WindUI:CreateWindow({
     }
 })
 
--- 3. CREATE TABS (Client placed near top so it's fully visible)
+-- 3. CREATE TABS
 local MainTab = Window:Tab({ Title = "Main", Icon = "house" })
 local FarmTab = Window:Tab({ Title = "Farm", Icon = "zap" })
 local ClientTab = Window:Tab({ Title = "Client", Icon = "user" })
@@ -637,7 +637,7 @@ FarmTab:Toggle({
 })
 
 -- =============================================================
---                        3. CLIENT TAB (VISIBLE NEAR TOP)
+--                        3. CLIENT TAB (FIXED MORPH & AUDIO)
 -- =============================================================
 ClientTab:Section({ Title = "Custom Audio Player" })
 
@@ -733,27 +733,71 @@ ClientTab:Button({
         end
 
         task.spawn(function()
-            local successId, targetUserId = pcall(function()
-                return Players:GetUserIdFromNameAsync(morphTargetName)
-            end)
+            local targetPlayer = nil
+            for _, p in pairs(Players:GetPlayers()) do
+                if string.lower(p.Name) == string.lower(morphTargetName) or string.lower(p.DisplayName) == string.lower(morphTargetName) then
+                    targetPlayer = p
+                    break
+                end
+            end
 
-            if not successId or not targetUserId then
-                WindUI:Notify({ Title = "Morph Error", Content = "Could not find user: " .. morphTargetName, Duration = 4 })
+            local localChar = Players.LocalPlayer.Character
+            if not localChar or not localChar:FindFirstChildOfClass("Humanoid") then
+                WindUI:Notify({ Title = "Morph Error", Content = "Your character is missing!", Duration = 4 })
                 return
             end
 
-            local successDesc, humanoidDesc = pcall(function()
-                return Players:GetHumanoidDescriptionFromUserId(targetUserId)
-            end)
+            if targetPlayer and targetPlayer.Character then
+                -- Direct copy method (bulletproof for in-game players)
+                local targetChar = targetPlayer.Character
+                for _, v in pairs(localChar:GetChildren()) do
+                    if v:IsA("Accessory") or v:IsA("Clothing") or v:IsA("ShirtGraphic") or v:IsA("BodyColors") then
+                        v:Destroy()
+                    end
+                end
 
-            if not successDesc or not humanoidDesc then
-                WindUI:Notify({ Title = "Morph Error", Content = "Failed to load appearance for " .. morphTargetName, Duration = 4 })
-                return
-            end
+                for _, v in pairs(targetChar:GetChildren()) do
+                    if v:IsA("Accessory") or v:IsA("Clothing") or v:IsA("ShirtGraphic") or v:IsA("BodyColors") then
+                        v:Clone().Parent = localChar
+                    end
+                end
 
-            local char = Players.LocalPlayer.Character
-            if char and char:FindFirstChildOfClass("Humanoid") then
-                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                local targetHead = targetChar:FindFirstChild("Head")
+                local localHead = localChar:FindFirstChild("Head")
+                if targetHead and localHead then
+                    local targetFace = targetHead:FindFirstChildOfClass("Decal")
+                    local localFace = localHead:FindFirstChildOfClass("Decal")
+                    if targetFace then
+                        if localFace then
+                            localFace.Texture = targetFace.Texture
+                        else
+                            targetFace:Clone().Parent = localHead
+                        end
+                    end
+                end
+
+                WindUI:Notify({ Title = "Morph Success", Content = "Locally morphed into " .. targetPlayer.DisplayName .. "!", Duration = 4 })
+            else
+                -- Fallback method using UserId description
+                local successId, targetUserId = pcall(function()
+                    return Players:GetUserIdFromNameAsync(morphTargetName)
+                end)
+
+                if not successId or not targetUserId then
+                    WindUI:Notify({ Title = "Morph Error", Content = "Could not find user: " .. morphTargetName, Duration = 4 })
+                    return
+                end
+
+                local successDesc, humanoidDesc = pcall(function()
+                    return Players:GetHumanoidDescriptionFromUserId(targetUserId)
+                end)
+
+                if not successDesc or not humanoidDesc then
+                    WindUI:Notify({ Title = "Morph Error", Content = "Failed to load appearance (restricted items).", Duration = 4 })
+                    return
+                end
+
+                local humanoid = localChar:FindFirstChildOfClass("Humanoid")
                 local successApply = pcall(function()
                     humanoid:ApplyDescription(humanoidDesc)
                 end)
@@ -763,8 +807,6 @@ ClientTab:Button({
                 else
                     WindUI:Notify({ Title = "Morph Error", Content = "Failed to apply description locally.", Duration = 4 })
                 end
-            else
-                WindUI:Notify({ Title = "Morph Error", Content = "Your character or humanoid is missing!", Duration = 4 })
             end
         end)
     end,
