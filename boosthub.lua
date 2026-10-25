@@ -28,6 +28,7 @@ getgenv().BoostHubConfig = getgenv().BoostHubConfig or {
     AutoCatClick = false,
     AutoRNG = false,
     AutoGoal = false,
+    AutoCollectOrbs = false,
     AntiBanEnabled = true,
     AutoChatSpam = false,
     CatClickDelay = 100,
@@ -89,6 +90,7 @@ local Window = WindUI:CreateWindow({
 -- 3. CREATE TABS
 local MainTab = Window:Tab({ Title = "Main", Icon = "house" })
 local FarmTab = Window:Tab({ Title = "Farm", Icon = "zap" })
+local EventsTab = Window:Tab({ Title = "Events", Icon = "sparkles" })
 local ClientTab = Window:Tab({ Title = "Client", Icon = "user" })
 local AutomationTab = Window:Tab({ Title = "Automation", Icon = "bot" })
 local HopTab = Window:Tab({ Title = "Hop", Icon = "refresh-cw" })
@@ -172,7 +174,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Translated Auto Cat Click status messages to English\n[-] Added PLS WAIT game verification check\n[-] Normal Server Hop and Small Server Hop active",
+            Content = "[-] Added Events tab with Auto Collect Orbs [NEW]\n[-] Translated Auto Cat Click notifications to English\n[-] Added PLS WAIT game verification check",
             Duration = 8
         })
     end,
@@ -693,7 +695,55 @@ FarmTab:Toggle({
 })
 
 -- =============================================================
---                        3. CLIENT TAB
+--                        3. EVENTS TAB
+-- =============================================================
+EventsTab:Section({ Title = "Special Events" })
+
+EventsTab:Toggle({
+    Title = "Auto Collect Orbs [NEW]",
+    Desc = "Automatically teleports to DiscoOrb parts and stops when no orbs are left",
+    Value = getgenv().BoostHubConfig.AutoCollectOrbs,
+    Callback = function(state)
+        getgenv().AutoCollectOrbs = state
+        getgenv().BoostHubConfig.AutoCollectOrbs = state
+        
+        if state then
+            if not getgenv().AntiBanEnabled then
+                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+            end
+            
+            WindUI:Notify({ Title = "Auto Collect Orbs", Content = "Started collecting DiscoOrbs!", Duration = 3 })
+            
+            task.spawn(function()
+                while getgenv().AutoCollectOrbs do
+                    local char = game.Players.LocalPlayer.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    
+                    -- Find any part/model named DiscoOrb in workspace
+                    local orb = workspace:FindFirstChild("DiscoOrb", true)
+                    
+                    if orb and hrp then
+                        if orb:IsA("Model") then
+                            hrp.CFrame = orb:GetPivot() + Vector3.new(0, 3, 0)
+                        elseif orb:IsA("BasePart") then
+                            hrp.CFrame = orb.CFrame + Vector3.new(0, 3, 0)
+                        end
+                    else
+                        WindUI:Notify({ Title = "Auto Collect Orbs", Content = "No more orbs found! Auto Collect stopped.", Duration = 4 })
+                        getgenv().AutoCollectOrbs = false
+                        getgenv().BoostHubConfig.AutoCollectOrbs = false
+                        break
+                    end
+                    
+                    task.wait(0.3)
+                end
+            end)
+        end
+    end,
+})
+
+-- =============================================================
+--                        4. CLIENT TAB
 -- =============================================================
 ClientTab:Section({ Title = "Custom Audio Player" })
 
@@ -867,7 +917,7 @@ ClientTab:Button({
 })
 
 -- =============================================================
---                     4. AUTOMATION TAB
+--                     5. AUTOMATION TAB
 -- =============================================================
 AutomationTab:Section({ Title = "Anti-Ban Protection" })
 
@@ -1147,7 +1197,7 @@ AutomationTab:Toggle({
 })
 
 -- =============================================================
---                        5. HOP TAB
+--                        6. HOP TAB
 -- =============================================================
 HopTab:Section({ Title = "Server Hopping Tasks" })
 
@@ -1258,7 +1308,7 @@ HopTab:Button({
 })
 
 -- =============================================================
---                        6. TELEPORT TAB
+--                        7. TELEPORT TAB
 -- =============================================================
 TeleportTab:Section({ Title = "Location Teleports" })
 
@@ -1296,7 +1346,7 @@ TeleportTab:Button({
 })
 
 -- =============================================================
---                      7. VISUAL TAB
+--                      8. VISUAL TAB
 -- =============================================================
 VisualTab:Section({ Title = "Performance & Graphics" })
 
@@ -1487,7 +1537,7 @@ VisualTab:Button({
 })
 
 -- =============================================================
---                    8. CONFIGURE TAB
+--                    9. CONFIGURE TAB
 -- =============================================================
 ConfigureTab:Section({ Title = "Saved Configurations & Auto Execute" })
 
@@ -1562,7 +1612,7 @@ ConfigureTab:Toggle({
 })
 
 -- =============================================================
---                        9. OTHER TAB
+--                        10. OTHER TAB
 -- =============================================================
 OtherTab:Section({ Title = "External Hubs & Scripts" })
 
@@ -1576,7 +1626,7 @@ OtherTab:Button({
 })
 
 -- =============================================================
---                      10. SETTINGS TAB
+--                      11. SETTINGS TAB
 -- =============================================================
 SettingsTab:Section({ Title = "Developer Info" })
 
