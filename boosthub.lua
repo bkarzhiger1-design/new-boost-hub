@@ -160,7 +160,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Fixed Auto Claim Stand (Filters shop stands & forces strict 5s hold)\n[-] Added Instant Proximity Prompts\n[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)\n[-] Fixed Auto Goal (Auto Anchors Character)",
+            Content = "[-] Reverted to universal BaseEmitter stand scan\n[-] Forced strict 5-second stay on Auto Claim Stand\n[-] Added Instant Proximity Prompts\n[-] Added Other Tab with Prixy Hub integration\n[-] Dual Key System (Linkvertise + Premium Key)",
             Duration = 8
         })
     end,
@@ -891,10 +891,10 @@ AutomationTab:Toggle({
     end,
 })
 
--- REWORKED & FIXED AUTO CLAIM STAND (FILTERS SHOP STANDS & LOCKS POSITION FOR 5s)
+-- OLD-STYLE UNIVERSAL AUTO CLAIM STAND WITH 5-SECOND HOLD POSITION
 AutomationTab:Button({
     Title = "Auto Claim Stand",
-    Desc = "Teleports to player stands, claims them, and stays for 5 seconds",
+    Desc = "Teleports to BaseEmitter, claims stand, and stays for 5 seconds",
     Callback = function()
         WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
 
@@ -905,19 +905,16 @@ AutomationTab:Button({
         local hrp = char.HumanoidRootPart
         local originalCFrame = hrp.CFrame
 
-        -- Gather valid BaseEmitter parts, filtering out shops
+        -- Gather all BaseEmitter parts universally
         local emitters = {}
         for _, obj in pairs(workspace:GetDescendants()) do
             if obj.Name == "BaseEmitter" and obj:IsA("BasePart") then
-                local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
-                if not string.find(parentName, "shop") and not string.find(parentName, "gear") then
-                    table.insert(emitters, obj)
-                end
+                table.insert(emitters, obj)
             end
         end
 
         if #emitters == 0 then
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No valid player stands found!", Duration = 4 })
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No BaseEmitter parts found in workspace!", Duration = 4 })
             return
         end
 
@@ -936,36 +933,31 @@ AutomationTab:Button({
                 end
 
                 if prompt and prompt.Enabled then
-                    local actionText = string.lower(prompt.ActionText or "")
-                    local objectText = string.lower(prompt.ObjectText or "")
-                    
-                    if string.find(actionText, "claim") or string.find(objectText, "claim") or string.find(actionText, "stand") then
-                        -- Teleport to the valid player stand
-                        hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
-                        task.wait(0.5)
+                    -- Teleport to the emitter
+                    hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
+                    task.wait(0.5)
 
-                        WindUI:Notify({ Title = "Auto Claim Stand", Content = "Claiming stand! Holding position for 5 seconds...", Duration = 4 })
+                    WindUI:Notify({ Title = "Auto Claim Stand", Content = "Claiming stand! Holding position for 5 seconds...", Duration = 4 })
 
-                        if fireproximityprompt then
-                            fireproximityprompt(prompt)
-                        else
-                            prompt:InputHoldBegin()
-                            task.wait(0.1)
-                            prompt:InputHoldEnd()
-                        end
-
-                        -- Lock character position for a strict 5 seconds
-                        local startTime = tick()
-                        while tick() - startTime < 5 do
-                            if hrp and emitter then
-                                hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
-                            end
-                            task.wait(0.2)
-                        end
-
-                        claimed = true
-                        break
+                    if fireproximityprompt then
+                        fireproximityprompt(prompt)
+                    else
+                        prompt:InputHoldBegin()
+                        task.wait(0.1)
+                        prompt:InputHoldEnd()
                     end
+
+                    -- Lock character position for a strict 5 seconds
+                    local startTime = tick()
+                    while tick() - startTime < 5 do
+                        if hrp and emitter then
+                            hrp.CFrame = emitter.CFrame + Vector3.new(0, 3, 0)
+                        end
+                        task.wait(0.2)
+                    end
+
+                    claimed = true
+                    break
                 end
             end
         end
@@ -976,7 +968,7 @@ AutomationTab:Button({
         if claimed then
             WindUI:Notify({ Title = "Auto Claim Stand", Content = "Successfully claimed stand and returned!", Duration = 3 })
         else
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "No unclaimed player stands available right now!", Duration = 4 })
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Checked all BaseEmitters, but no prompt was found!", Duration = 4 })
         end
     end,
 })
