@@ -179,7 +179,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Made Auto Beg greeting optional with customizable format\n[-] Added dynamic target tracking (follows moving/teleporting players) and instant switch if target leaves",
+            Content = "[-] Character now faces the target player instead of walls\n[-] Increased wait time near player to 25s with active location tracking",
             Duration = 8
         })
     end,
@@ -679,7 +679,7 @@ FarmTab:Toggle({
                 local waitTime = math.random(30, 40) / 10
                 task.wait(waitTime)
             end
-        end)
+        end,
         
         WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal activated (Pushing every 3-4s without anchor)!", Duration = 3 })
     end,
@@ -1059,10 +1059,10 @@ AutomationTab:Input({
     end,
 })
 
--- AUTO BEG TOGGLE (PATHFINDING + DYNAMIC TARGET TRACKING + INSTANT RE-TARGET ON LEAVE)
+-- AUTO BEG TOGGLE (PATHFINDING + FACE PLAYER + 25S WAIT + FOLLOW ON MOVE)
 AutomationTab:Toggle({
     Title = "Auto Beg",
-    Desc = "Follows moving players, switches if they leave, uses DonationSign, and resets if stuck",
+    Desc = "Follows moving players, faces them, waits 25s, and tracks location changes",
     Value = getgenv().BoostHubConfig.AutoBeg,
     Callback = function(state)
         getgenv().AutoBeg = state
@@ -1073,7 +1073,7 @@ AutomationTab:Toggle({
                 WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             end
 
-            WindUI:Notify({ Title = "Auto Beg", Content = "Auto Beg pathfinding started (Speed set to 23)!", Duration = 3 })
+            WindUI:Notify({ Title = "Auto Beg", Content = "Auto Beg pathfinding started (Speed 23, 25s wait, facing player)!", Duration = 3 })
 
             task.spawn(function()
                 local PathfindingService = game:GetService("PathfindingService")
@@ -1224,7 +1224,7 @@ AutomationTab:Toggle({
                                     local currentTargetPos = targetPlayer.Character.HumanoidRootPart.Position
                                     local currentDest = currentTargetPos + (targetPlayer.Character.HumanoidRootPart.CFrame.LookVector * randomStuds)
                                     if (destination - currentDest).Magnitude > 8 then
-                                        break -- Break waypoint walk to recalculate new path to moved player
+                                        break 
                                     end
 
                                     local waypoint = waypoints[waypointIndex]
@@ -1279,7 +1279,6 @@ AutomationTab:Toggle({
                             task.wait(0.2)
                         end
 
-                        -- If target left server while walking, loop back to find a new guy instantly
                         if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then
                             continue
                         end
@@ -1289,18 +1288,34 @@ AutomationTab:Toggle({
                             local greetingMsg = string.format(autoBegMessageTemplate, targetPlayer.Name)
                             SendChatMessage(greetingMsg)
                         end
+
+                        -- Wait for 25 seconds near the player, facing them and following if they move/teleport away
+                        local elapsed = 0
+                        while elapsed < 25 and getgenv().AutoBeg do
+                            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                                local targetHrp = targetPlayer.Character.HumanoidRootPart
+                                
+                                -- Face the player directly (keeping same Y level to prevent tilting)
+                                local lookAtPos = Vector3.new(targetHrp.Position.X, hrp.Position.Y, targetHrp.Position.Z)
+                                hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
+
+                                -- If player walks away or teleports > 10 studs during the 25s wait, follow them!
+                                if (hrp.Position - targetHrp.Position).Magnitude > 10 then
+                                    humanoid:MoveTo(targetHrp.Position)
+                                end
+                            else
+                                break -- Player left server or reset
+                            end
+                            task.wait(0.5)
+                            elapsed = elapsed + 0.5
+                        end
                     else
                         local spawnLoc = workspace:FindFirstChild("SpawnLocation", true)
                         if spawnLoc then
                             local spawnPos = spawnLoc:IsA("Model") and spawnLoc:GetPivot().Position or spawnLoc.Position
                             humanoid:MoveTo(spawnPos)
                         end
-                    end
-
-                    local elapsed = 0
-                    while elapsed < 15 and getgenv().AutoBeg do
-                        task.wait(0.5)
-                        elapsed = elapsed + 0.5
+                        task.wait(3)
                     end
 
                     if getgenv().AutoBeg and char and char:FindFirstChildOfClass("Humanoid") then
