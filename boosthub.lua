@@ -1,6 +1,6 @@
--- =================================================================
+-- =============================================================
 --                     BOOST HUB - WIND UI TEMPLATE
--- =================================================================
+-- =============================================================
 
 -- 1. SAFE LOAD WIND UI LIBRARY
 local success, WindUI = pcall(function()
@@ -174,7 +174,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Fixed startup crash causing empty tabs\n[-] Restored Config Manager & all UI elements\n[-] All buttons, toggles, and sections active",
+            Content = "[-] Updated Auto Goal: Removed anchor and adjusted push interval to 3-4s\n[-] All tabs and features fully loaded",
             Duration = 8
         })
     end,
@@ -626,9 +626,10 @@ FarmTab:Toggle({
     end,
 })
 
+-- AUTO GOAL (UPDATED: NO ANCHOR, PUSHES BALL EVERY 3-4 SECONDS)
 FarmTab:Toggle({
     Title = "Auto Goal",
-    Desc = "Auto anchors character and pushes SoccerBall straight towards goal",
+    Desc = "Teleports to SoccerBall and pushes it towards the goal every 3-4 seconds",
     Value = getgenv().BoostHubConfig.AutoGoal,
     Callback = function(state)
         if state and getgenv().AutoRNG then
@@ -645,11 +646,7 @@ FarmTab:Toggle({
         getgenv().AutoGoal = state
         getgenv().BoostHubConfig.AutoGoal = state
 
-        local char = game.Players.LocalPlayer.Character
         if not state then
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                char.HumanoidRootPart.Anchored = false
-            end
             return
         end
 
@@ -667,7 +664,7 @@ FarmTab:Toggle({
                     local ballPart = soccerBall:IsA("BasePart") and soccerBall or soccerBall:FindFirstChildWhichIsA("BasePart", true)
                     
                     if ballPart then
-                        hrp.Anchored = true
+                        -- Teleport right behind/at the ball to push it forward without anchoring
                         hrp.CFrame = ballPart.CFrame + Vector3.new(0, 2, -3)
                         
                         if ballPart:IsA("BasePart") then
@@ -676,20 +673,13 @@ FarmTab:Toggle({
                     end
                 end
                 
-                local waitTime = 1.2
-                if getgenv().AntiBanEnabled then
-                    waitTime = waitTime + (math.random(1, 5) / 10)
-                end
+                -- Random delay between 3 and 4 seconds
+                local waitTime = math.random(30, 40) / 10
                 task.wait(waitTime)
-            end
-
-            local finalChar = game.Players.LocalPlayer.Character
-            if finalChar and finalChar:FindFirstChild("HumanoidRootPart") then
-                finalChar.HumanoidRootPart.Anchored = false
             end
         end)
         
-        WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal activated with auto-anchor!", Duration = 3 })
+        WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal activated (Pushing every 3-4s without anchor)!", Duration = 3 })
     end,
 })
 
@@ -1617,7 +1607,7 @@ ConfigureTab:Button({
         if writefile then
             local successSave, err = pcall(function()
                 local httpService = game:GetService("HttpService")
-                local encoded = httpService:JSONEncode(getgenv().BoostHubConfig)
+                local encoded = httpService:JSONDecode(getgenv().BoostHubConfig)
                 writefile("BoostHubConfig.json", encoded)
             end)
             if successSave then
