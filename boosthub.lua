@@ -29,6 +29,7 @@ getgenv().BoostHubConfig = getgenv().BoostHubConfig or {
     AutoRNG = false,
     AutoGoal = false,
     AutoCollectOrbs = false,
+    AutoBeg = false,
     AntiBanEnabled = true,
     AutoChatSpam = false,
     CatClickDelay = 100,
@@ -174,7 +175,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Updated Auto Goal: Removed anchor and adjusted push interval to 3-4s\n[-] All tabs and features fully loaded",
+            Content = "[-] Reworked Auto Beg into a toggleable feature targeting paid-item avatars\n[-] Configured 5-7 studs front positioning and 15s character reset cycle",
             Duration = 8
         })
     end,
@@ -485,7 +486,7 @@ MainTab:Button({
             local myChar = game.Players.LocalPlayer.Character
             if myChar and myChar:FindFirstChild("HumanoidRootPart") then
                 myChar.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-                WindUI:Notify({ Title = "Teleported", Content = "Teleported to " .. targetPlayer.DisplayName, Duration = 3 })
+                WindUI:Notify({ Title = "Teleported", Content = "Teleported to " + targetPlayer.DisplayName, Duration = 3 })
             end
         else
             WindUI:Notify({ Title = "Error", Content = "Player not found or character missing!", Duration = 3 })
@@ -626,7 +627,6 @@ FarmTab:Toggle({
     end,
 })
 
--- AUTO GOAL (UPDATED: NO ANCHOR, PUSHES BALL EVERY 3-4 SECONDS)
 FarmTab:Toggle({
     Title = "Auto Goal",
     Desc = "Teleports to SoccerBall and pushes it towards the goal every 3-4 seconds",
@@ -664,7 +664,6 @@ FarmTab:Toggle({
                     local ballPart = soccerBall:IsA("BasePart") and soccerBall or soccerBall:FindFirstChildWhichIsA("BasePart", true)
                     
                     if ballPart then
-                        -- Teleport right behind/at the ball to push it forward without anchoring
                         hrp.CFrame = ballPart.CFrame + Vector3.new(0, 2, -3)
                         
                         if ballPart:IsA("BasePart") then
@@ -673,7 +672,6 @@ FarmTab:Toggle({
                     end
                 end
                 
-                -- Random delay between 3 and 4 seconds
                 local waitTime = math.random(30, 40) / 10
                 task.wait(waitTime)
             end
@@ -1034,53 +1032,101 @@ AutomationTab:Button({
     end,
 })
 
-AutomationTab:Button({
+-- AUTO BEG TOGGLE (REWORKED)
+AutomationTab:Toggle({
     Title = "Auto Beg",
-    Desc = "Teleports to SpawnLocation and equips begging tool",
-    Callback = function()
-        if not getgenv().AntiBanEnabled then
-            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-        end
+    Desc = "Automatically targets players with paid items, stands 5-7 studs in front, and cycles every 15s",
+    Value = getgenv().BoostHubConfig.AutoBeg,
+    Callback = function(state)
+        getgenv().AutoBeg = state
+        getgenv().BoostHubConfig.AutoBeg = state
 
-        local player = game.Players.LocalPlayer
-        local char = player.Character
-        if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then return end
-
-        local spawnLoc = workspace:FindFirstChild("SpawnLocation", true)
-        if spawnLoc then
-            if spawnLoc:IsA("Model") then
-                char.HumanoidRootPart.CFrame = spawnLoc:GetPivot() + Vector3.new(0, 3, 0)
-            elseif spawnLoc:IsA("BasePart") then
-                char.HumanoidRootPart.CFrame = spawnLoc.CFrame + Vector3.new(0, 3, 0)
+        if state then
+            if not getgenv().AntiBanEnabled then
+                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             end
-        end
 
-        local toolToEquip = nil
-        if player:FindFirstChild("Backpack") then
-            for _, item in pairs(player.Backpack:GetChildren()) do
-                if item:IsA("Tool") then
-                    toolToEquip = item
-                    break
+            WindUI:Notify({ Title = "Auto Beg", Content = "Auto Beg started!", Duration = 3 })
+
+            task.spawn(function()
+                while getgenv().AutoBeg do
+                    local player = game.Players.LocalPlayer
+                    local char = player.Character
+                    if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then
+                        task.wait(1)
+                        continue
+                    end
+
+                    -- 1. Check if holding a tool
+                    local equippedTool = char:FindFirstChildOfClass("Tool")
+                    if not equippedTool then
+                        -- Check backpack
+                        local backpackTool = player.Backpack and player.Backpack:FindFirstChildOfClass("Tool")
+                        if backpackTool then
+                            char.Humanoid:EquipTool(backpackTool)
+                            task.wait(0.5)
+                            equippedTool = char:FindFirstChildOfClass("Tool")
+                        end
+                    end
+
+                    if not equippedTool then
+                        WindUI:Notify({ Title = "Auto Beg", Content = "Buy a Sign in a shop for this to work!", Duration = 6 })
+                        getgenv().AutoBeg = false
+                        getgenv().BoostHubConfig.AutoBeg = false
+                        break
+                    end
+
+                    -- 2. Scan players for paid items (Accessory, Clothing, etc.)
+                    local targetPlayer = nil
+                    for _, p in ipairs(game.Players:GetPlayers()) do
+                        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                            local hasPaidItem = false
+                            for _, desc in ipairs(p.Character:GetDescendants()) do
+                                if desc:IsA("Accessory") or desc:IsA("Clothing") or desc:IsA("ShirtGraphic") or desc:IsA("BodyColors") then
+                                    hasPaidItem = true
+                                    break
+                                end
+                            end
+                            if hasPaidItem then
+                                targetPlayer = p
+                                break
+                            end
+                        end
+                    end
+
+                    local hrp = char.HumanoidRootPart
+
+                    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        -- Found a player with paid items: position 5-7 studs in front of them
+                        local targetHrp = targetPlayer.Character.HumanoidRootPart
+                        local randomStuds = math.random(5, 7)
+                        -- Position in front based on target's look vector
+                        hrp.CFrame = targetHrp.CFrame + (targetHrp.CFrame.LookVector * randomStuds) + Vector3.new(0, 0, 0)
+                    else
+                        -- No players with items found: tp to SpawnLocation and wait
+                        local spawnLoc = workspace:FindFirstChild("SpawnLocation", true)
+                        if spawnLoc then
+                            if spawnLoc:IsA("Model") then
+                                hrp.CFrame = spawnLoc:GetPivot() + Vector3.new(0, 3, 0)
+                            elseif spawnLoc:IsA("BasePart") then
+                                hrp.CFrame = spawnLoc.CFrame + Vector3.new(0, 3, 0)
+                            end
+                        end
+                    end
+
+                    -- Wait for 15 seconds, then reset character to search for another player
+                    local elapsed = 0
+                    while elapsed < 15 and getgenv().AutoBeg do
+                        task.wait(0.5)
+                        elapsed = elapsed + 0.5
+                    end
+
+                    if getgenv().AutoBeg and char and char:FindFirstChildOfClass("Humanoid") then
+                        char.Humanoid.Health = 0 -- Reset character
+                        task.wait(2) -- Wait for respawn
+                    end
                 end
-            end
-        end
-
-        if not toolToEquip then
-            for _, item in pairs(char:GetChildren()) do
-                if item:IsA("Tool") then
-                    toolToEquip = item
-                    break
-                end
-            end
-        end
-
-        if toolToEquip then
-            if toolToEquip.Parent == player.Backpack then
-                char.Humanoid:EquipTool(toolToEquip)
-            end
-            WindUI:Notify({ Title = "Auto Beg", Content = "Successfully started Auto Begging.", Duration = 4 })
-        else
-            WindUI:Notify({ Title = "Auto Beg", Content = "Buy a sign in a shop first!", Duration = 4 })
+            end)
         end
     end,
 })
@@ -1607,7 +1653,7 @@ ConfigureTab:Button({
         if writefile then
             local successSave, err = pcall(function()
                 local httpService = game:GetService("HttpService")
-                local encoded = httpService:JSONDecode(getgenv().BoostHubConfig)
+                local encoded = httpService:JSONEncode(getgenv().BoostHubConfig)
                 writefile("BoostHubConfig.json", encoded)
             end)
             if successSave then
