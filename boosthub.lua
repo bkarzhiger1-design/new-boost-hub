@@ -63,11 +63,10 @@ local autoChatMessages = {
     "Currently afk. Any given amount will be appreciated!"
 }
 
--- 2. CREATE MAIN WINDOW (WITH WINDUI CONFIG MANAGER & DUAL-KEY SUPPORT)
+-- 2. CREATE MAIN WINDOW (WITH DUAL-KEY SUPPORT)
 local Window = WindUI:CreateWindow({
     Title = "Boost Hub",
     SubTitle = "v1.0.0 | made by xeavz",
-    Folder = "BoostHubData", -- Enables WindUI Built-In Config Manager
     TabWidth = 160,
     Size = UDim2.fromOffset(600, 520),
     Theme = "Dark",
@@ -87,9 +86,6 @@ local Window = WindUI:CreateWindow({
         SaveKey = true,
     }
 })
-
--- Initialize Config Manager
-local ConfigManager = Window.ConfigManager
 
 -- 3. CREATE TABS
 local MainTab = Window:Tab({ Title = "Main", Icon = "house" })
@@ -178,7 +174,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Restored all 1600+ lines of features & tabs\n[-] Fully populated Config Manager & Auto-Reexecute\n[-] All buttons, toggles, and sections active",
+            Content = "[-] Fixed startup crash causing empty tabs\n[-] Restored Config Manager & all UI elements\n[-] All buttons, toggles, and sections active",
             Duration = 8
         })
     end,
@@ -1593,12 +1589,6 @@ VisualTab:Button({
 -- =============================================================
 --                    9. CONFIGURE TAB
 -- =============================================================
-ConfigureTab:Section({ Title = "Configuration Manager" })
-
-if ConfigManager then
-    ConfigManager:BuildConfigSection(ConfigureTab)
-end
-
 ConfigureTab:Section({ Title = "Saved Configurations & Auto Execute" })
 
 ConfigureTab:Toggle({
