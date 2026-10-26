@@ -175,7 +175,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Increased Auto Chat Spammer delay to 25s\n[-] Added unique player tracking and anti-stuck position reset (15-20s) for Auto Beg",
+            Content = "[-] Increased Auto Chat Spammer delay to 25s\n[-] Added AFK player filter (skips players staying still > 3 mins) for Auto Beg",
             Duration = 8
         })
     end,
@@ -1032,10 +1032,10 @@ AutomationTab:Button({
     end,
 })
 
--- AUTO BEG TOGGLE (PATHFINDING + UNIQUE PLAYER TRACKING + ANTI-STUCK RESET)
+-- AUTO BEG TOGGLE (PATHFINDING + PLAYER TRACKING + ANTI-STUCK + AFK PLAYER FILTER > 3 MINS)
 AutomationTab:Toggle({
     Title = "Auto Beg",
-    Desc = "Pathfinds to unvisited paid-item players, skips duplicates, and resets if stuck",
+    Desc = "Pathfinds to active paid-item players, skips AFK players (>3m still), and resets if stuck",
     Value = getgenv().BoostHubConfig.AutoBeg,
     Callback = function(state)
         getgenv().AutoBeg = state
@@ -1051,6 +1051,7 @@ AutomationTab:Toggle({
             task.spawn(function()
                 local PathfindingService = game:GetService("PathfindingService")
                 local beggedPlayers = {} -- Tracks players you have already visited
+                local playerTrackers = {} -- Tracks player positions and stillness duration for AFK detection
 
                 -- Buffer delay on startup/respawn to let inventory load the tool
                 task.wait(2.5)
@@ -1085,29 +1086,35 @@ AutomationTab:Toggle({
                         break
                     end
 
-                    -- 2. Scan players for paid items (skipping already visited players)
-                    local targetPlayer = nil
+                    -- Update/Track AFK Status for all players in the server
+                    local currentTime = tick()
                     for _, p in ipairs(game.Players:GetPlayers()) do
-                        if p ~= player and not beggedPlayers[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                            local hasPaidItem = false
-                            for _, desc in ipairs(p.Character:GetDescendants()) do
-                                if desc:IsA("Accessory") or desc:IsA("Clothing") or desc:IsA("ShirtGraphic") or desc:IsA("BodyColors") then
-                                    hasPaidItem = true
-                                    break
+                        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                            local pPos = p.Character.HumanoidRootPart.Position
+                            if not playerTrackers[p.UserId] then
+                                playerTrackers[p.UserId] = { pos = pPos, time = currentTime }
+                            else
+                                local data = playerTrackers[p.UserId]
+                                if (pPos - data.pos).Magnitude > 3 then -- Moved more than 3 studs, reset timer
+                                    data.pos = pPos
+                                    data.time = currentTime
                                 end
-                            end
-                            if hasPaidItem then
-                                targetPlayer = p
-                                break
                             end
                         end
                     end
 
-                    -- If everyone in the server has already been visited, clear history to loop again
-                    if not targetPlayer then
-                        beggedPlayers = {}
-                        for _, p in ipairs(game.Players:GetPlayers()) do
-                            if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    -- 2. Scan players for paid items (skipping visited and AFK players > 3 mins)
+                    local targetPlayer = nil
+                    for _, p in ipairs(game.Players:GetPlayers()) do
+                        if p ~= player and not beggedPlayers[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                            -- Check AFK status (> 180 seconds / 3 minutes stationary)
+                            local tracker = playerTrackers[p.UserId]
+                            local isAfk = false
+                            if tracker and (currentTime - tracker.time) >= 180 then
+                                isAfk = true
+                            end
+
+                            if not isAfk then
                                 local hasPaidItem = false
                                 for _, desc in ipairs(p.Character:GetDescendants()) do
                                     if desc:IsA("Accessory") or desc:IsA("Clothing") or desc:IsA("ShirtGraphic") or desc:IsA("BodyColors") then
@@ -1118,6 +1125,34 @@ AutomationTab:Toggle({
                                 if hasPaidItem then
                                     targetPlayer = p
                                     break
+                                end
+                            end
+                        end
+                    end
+
+                    -- If no active non-AFK players are left, clear history and try again
+                    if not targetPlayer then
+                        beggedPlayers = {}
+                        for _, p in ipairs(game.Players:GetPlayers()) do
+                            if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                                local tracker = playerTrackers[p.UserId]
+                                local isAfk = false
+                                if tracker and (currentTime - tracker.time) >= 180 then
+                                    isAfk = true
+                                end
+
+                                if not isAfk then
+                                    local hasPaidItem = false
+                                    for _, desc in ipairs(p.Character:GetDescendants()) do
+                                        if desc:IsA("Accessory") or desc:IsA("Clothing") or desc:IsA("ShirtGraphic") or desc:IsA("BodyColors") then
+                                            hasPaidItem = true
+                                            break
+                                        end
+                                    end
+                                    if hasPaidItem then
+                                        targetPlayer = p
+                                        break
+                                    end
                                 end
                             end
                         end
@@ -1191,7 +1226,7 @@ AutomationTab:Toggle({
                             humanoid:MoveTo(destination)
                         end
                     else
-                        -- No players with items found: walk to SpawnLocation and wait
+                        -- No active players with items found: walk to SpawnLocation and wait
                         local spawnLoc = workspace:FindFirstChild("SpawnLocation", true)
                         if spawnLoc then
                             local spawnPos = spawnLoc:IsA("Model") and spawnLoc:GetPivot().Position or spawnLoc.Position
@@ -1325,7 +1360,7 @@ AutomationTab:Input({
     end,
 })
 
--- AUTO CHAT SPAMMER (UPDATED TO 25 SECONDS DELAY)
+-- AUTO CHAT SPAMMER (25 SECONDS DELAY)
 AutomationTab:Toggle({
     Title = "Auto Chat Spammer",
     Desc = "Sends a random custom message from your 5 fields every 25 seconds",
@@ -1351,7 +1386,7 @@ AutomationTab:Toggle({
                         SendChatMessage(activeMessages[randomIndex])
                     end
                     
-                    local waitTime = 25 -- Updated from 15 to 25 seconds
+                    local waitTime = 25
                     if getgenv().AntiBanEnabled then
                         waitTime = waitTime + math.random(-4, 5)
                     end
