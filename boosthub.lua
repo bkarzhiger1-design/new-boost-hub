@@ -8,7 +8,6 @@ local success, WindUI = pcall(function()
 end)
 
 if not success or not WindUI then
-    -- Fallback notification if UI fails to load
     local gui = Instance.new("ScreenGui", game.CoreGui)
     local label = Instance.new("TextLabel", gui)
     label.Size = UDim2.new(1, 0, 0, 50)
@@ -77,7 +76,170 @@ local autoChatMessages = {
 local autoBegSayEnabled = true
 local autoBegMessageTemplate = "Hello %s, would you like to donate me? Any donation is highly appreciated :D"
 
--- CREATE MAIN WINDOW (WITH DUAL-KEY SUPPORT)
+-- Configuration System Variables
+local configInputName = "DefaultConfig"
+local selectedConfigDropdown = "DefaultConfig"
+local autoLoadConfigName = ""
+
+-- Helper Services
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+
+-- ADMIN / STAFF WATCHLIST & AUTO HOP PROTECTION SYSTEM
+local adminList = { "valchuuz", "angel019999", "bvetterdays", "HayyanPro167", "HayyanProRBX" }
+
+local function checkAndHopForAdmins(player)
+    if player == Players.LocalPlayer then return end
+    for _, adminName in ipairs(adminList) do
+        if string.lower(player.Name) == string.lower(adminName) or string.lower(player.DisplayName) == string.lower(adminName) then
+            WindUI:Notify({
+                Title = "Admin Detected!",
+                Content = "Admins joined the server. We hopped/kicked you from this server so they can't ban you",
+                Duration = 10
+            })
+            task.wait(1.5)
+            
+            -- Perform automatic server hop
+            local placeId = game.PlaceId
+            local servers = {}
+            local req = (syn and syn.request) or (http and http.request) or http_request or request
+            if req then
+                local success, raw = pcall(function()
+                    return req({ Url = string.format("https://games.roblox.com/v1/games/%d/servers/0?sortOrder=Desc&limit=100", placeId) })
+                end)
+                if success and raw and raw.Body then
+                    local data = HttpService:JSONDecode(raw.Body)
+                    if data and data.data then
+                        for _, server in ipairs(data.data) do
+                            if type(server) == "table" and server.id ~= game.JobId and server.playing < server.maxPlayers then
+                                table.insert(servers, server.id)
+                            end
+                        end
+                    end
+                end
+            end
+
+            if #servers > 0 then
+                local targetJob = servers[math.random(1, #servers)]
+                TeleportService:TeleportToPlaceInstance(placeId, targetJob, Players.LocalPlayer)
+            else
+                TeleportService:Teleport(placeId, Players.LocalPlayer)
+            end
+            return true
+        end
+    end
+    return false
+end
+
+-- Scan already present players on startup
+for _, p in ipairs(Players:GetPlayers()) do
+    checkAndHopForAdmins(p)
+end
+
+-- Listen for new players joining
+Players.PlayerAdded:Connect(function(p)
+    p.CharacterAdded:Connect(function()
+        checkAndHopForAdmins(p)
+    end)
+    checkAndHopForAdmins(p)
+end)
+
+-- CONFIGURATION SYSTEM FUNCTIONS
+local function getSavedConfigsList()
+    local list = { "DefaultConfig" }
+    pcall(function()
+        if listfiles then
+            local files = listfiles("BoostHubConfigs")
+            for _, file in ipairs(files) do
+                local name = file:match("([^/]+)$")
+                name = name:match("([^\]+)$") -- handles backslashes on Windows executors
+                if name and name:sub(-5) == ".json" then
+                    local configName = name:sub(1, -6)
+                    table.insert(list, configName)
+                end
+            end
+        end
+    end)
+    return list
+end
+
+local function saveConfiguration(configName)
+    if not writefile then
+        WindUI:Notify({ Title = "Error", Content = "Your executor does not support writefile!", Duration = 3 })
+        return
+    end
+    pcall(function()
+        if makefolder and not pcall(function() listfiles("BoostHubConfigs") end) then
+            makefolder("BoostHubConfigs")
+        end
+        local configData = {
+            AutoCatClick = getgenv().BoostHubConfig.AutoCatClick,
+            AutoRNG = getgenv().BoostHubConfig.AutoRNG,
+            AutoGoal = getgenv().BoostHubConfig.AutoGoal,
+            AutoCollectOrbs = getgenv().BoostHubConfig.AutoCollectOrbs,
+            AutoBeg = getgenv().BoostHubConfig.AutoBeg,
+            AntiBanEnabled = getgenv().AntiBanEnabled,
+            AutoChatSpam = getgenv().BoostHubConfig.AutoChatSpam,
+            CatClickDelay = getgenv().BoostHubConfig.CatClickDelay,
+            RNGDelay = getgenv().BoostHubConfig.RNGDelay,
+            AutoBegSay = autoBegSayEnabled,
+            AutoBegMessage = autoBegMessageTemplate,
+            AutoExecuteEnabled = getgenv().BoostHubConfig.AutoExecuteEnabled
+        }
+        local encoded = HttpService:JSONEncode(configData)
+        writefile("BoostHubConfigs/" .. configName .. ".json", encoded)
+        WindUI:Notify({ Title = "Configuration Saved", Content = "Successfully saved configuration: " .. configName, Duration = 3 })
+    end)
+end
+
+local function loadConfiguration(configName)
+    if not readfile then return end
+    local success, content = pcall(function()
+        return readfile("BoostHubConfigs/" .. configName .. ".json")
+    end)
+    if success and content then
+        local successDecode, data = pcall(function()
+            return HttpService:JSONDecode(content)
+        end)
+        if successDecode and type(data) == "table" then
+            getgenv().BoostHubConfig.AutoCatClick = data.AutoCatClick or false
+            getgenv().BoostHubConfig.AutoRNG = data.AutoRNG or false
+            getgenv().BoostHubConfig.AutoGoal = data.AutoGoal or false
+            getgenv().BoostHubConfig.AutoCollectOrbs = data.AutoCollectOrbs or false
+            getgenv().BoostHubConfig.AutoBeg = data.AutoBeg or false
+            getgenv().AntiBanEnabled = data.AntiBanEnabled ~= false
+            getgenv().BoostHubConfig.AntiBanEnabled = getgenv().AntiBanEnabled
+            getgenv().AutoChatSpam = data.AutoChatSpam or false
+            getgenv().BoostHubConfig.AutoChatSpam = getgenv().AutoChatSpam
+            getgenv().BoostHubConfig.CatClickDelay = data.CatClickDelay or 100
+            getgenv().CatClickDelay = getgenv().BoostHubConfig.CatClickDelay / 1000
+            getgenv().BoostHubConfig.RNGDelay = data.RNGDelay or 15
+            getgenv().RNGDelay = getgenv().BoostHubConfig.RNGDelay
+            autoBegSayEnabled = data.AutoBegSay ~= false
+            if data.AutoBegMessage then
+                autoBegMessageTemplate = data.AutoBegMessage
+            end
+            getgenv().BoostHubConfig.AutoExecuteEnabled = data.AutoExecuteEnabled or false
+            
+            WindUI:Notify({ Title = "Configuration Loaded", Content = "Loaded configuration: " .. configName, Duration = 3 })
+        end
+    end
+end
+
+-- Check and auto-load configuration on startup
+pcall(function()
+    if readfile then
+        local success, autoName = pcall(function()
+            return readfile("BoostHubConfigs/AutoLoadConfig.json")
+        end)
+        if success and autoName and autoName ~= "" then
+            loadConfiguration(autoName)
+        end
+    end
+end)
+
+-- CREATE MAIN WINDOW
 local Window = WindUI:CreateWindow({
     Title = "Boost Hub",
     SubTitle = "v1.0.0 | made by xeavz",
@@ -113,11 +275,6 @@ local VisualTab = Window:Tab({ Title = "Visual", Icon = "eye" })
 local ConfigureTab = Window:Tab({ Title = "Configure", Icon = "palette" })
 local OtherTab = Window:Tab({ Title = "Other", Icon = "folder" })
 local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
-
--- Helper Services for Server Hopping & Client Features
-local TeleportService = game:GetService("TeleportService")
-local Players = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
 
 -- Helper Function to Attempt Teleporting to a Player's Server
 local function TryTeleportToPlayer(username, roleName)
@@ -188,7 +345,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Cleaned localization and fixed developer credit styling\n[-] Character faces target player, waits 25s, and tracks movement",
+            Content = "[-] Added fully functional Configuration System (Save, Choose, Auto-Load)\n[-] Added automatic anti-admin detection and server hop protection",
             Duration = 8
         })
     end,
@@ -1045,7 +1202,7 @@ AutomationTab:Button({
     end,
 })
 
--- AUTO BEG CONFIG CONTROLS (OPTIONAL AUTO SAY & MESSAGE TEMPLATE)
+-- AUTO BEG CONFIG CONTROLS
 AutomationTab:Toggle({
     Title = "Auto Beg Say Toggle",
     Desc = "Enables or disables greeting targeted players in chat automatically",
@@ -1068,7 +1225,7 @@ AutomationTab:Input({
     end,
 })
 
--- AUTO BEG TOGGLE (PATHFINDING + FACE PLAYER + 25S WAIT + FOLLOW ON MOVE)
+-- AUTO BEG TOGGLE
 AutomationTab:Toggle({
     Title = "Auto Beg",
     Desc = "Follows moving players, faces them, waits 25s, and tracks location changes",
@@ -1102,10 +1259,8 @@ AutomationTab:Toggle({
                     local hrp = char.HumanoidRootPart
                     local humanoid = char.Humanoid
 
-                    -- Force walk speed to 23 during Auto Beg
                     humanoid.WalkSpeed = 23
 
-                    -- Check specifically for 'DonationSign' tool in character or backpack
                     local equippedTool = char:FindFirstChild("DonationSign")
                     if not equippedTool then
                         task.wait(1)
@@ -1125,7 +1280,6 @@ AutomationTab:Toggle({
                         break
                     end
 
-                    -- Update/Track AFK Status for all players in the server
                     local currentTime = tick()
                     for _, p in ipairs(game.Players:GetPlayers()) do
                         if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -1142,7 +1296,6 @@ AutomationTab:Toggle({
                         end
                     end
 
-                    -- Scan players for paid items (skipping visited and AFK players > 3 mins)
                     local targetPlayer = nil
                     for _, p in ipairs(game.Players:GetPlayers()) do
                         if p ~= player and not beggedPlayers[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -1198,7 +1351,6 @@ AutomationTab:Toggle({
                     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
                         beggedPlayers[targetPlayer.UserId] = true 
                         
-                        -- Dynamic pathfinding loop with live target tracking and disconnect check
                         local successRoute = false
                         local stuckTime = 0
                         local lastPos = hrp.Position
@@ -1290,13 +1442,11 @@ AutomationTab:Toggle({
                             continue
                         end
 
-                        -- Send optional targeted greeting message once arrived
                         if getgenv().AutoBeg and autoBegSayEnabled and targetPlayer and targetPlayer.Name then
                             local greetingMsg = string.format(autoBegMessageTemplate, targetPlayer.Name)
                             SendChatMessage(greetingMsg)
                         end
 
-                        -- Wait for 25 seconds near the player, facing them and following if they move/teleport away
                         local elapsed = 0
                         while elapsed < 25 and getgenv().AutoBeg do
                             if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -1450,7 +1600,7 @@ AutomationTab:Input({
     end,
 })
 
--- AUTO CHAT SPAMMER (25 SECONDS DELAY)
+-- AUTO CHAT SPAMMER
 AutomationTab:Toggle({
     Title = "Auto Chat Spammer",
     Desc = "Sends a random custom message from your 5 fields every 25 seconds",
@@ -1834,46 +1984,72 @@ VisualTab:Button({
 })
 
 -- =============================================================
---                    9. CONFIGURE TAB
+--                    9. CONFIGURE TAB (FULLY FUNCTIONAL CONFIG SYSTEM)
 -- =============================================================
-ConfigureTab:Section({ Title = "Saved Configurations & Auto Execute" })
+ConfigureTab:Section({ Title = "Configuration Manager" })
 
-ConfigureTab:Toggle({
-    Title = "Auto Execute",
-    Desc = "Automatically re-executes Boost Hub on server hop or reconnect",
-    Value = getgenv().BoostHubConfig.AutoExecuteEnabled,
-    Callback = function(state)
-        getgenv().BoostHubConfig.AutoExecuteEnabled = state
-        if state and (queue_on_teleport or syn and syn.queue_on_teleport) then
-            local queueFunction = queue_on_teleport or syn.queue_on_teleport
-            queueFunction([[
-                task.wait(2)
-                loadstring(game:HttpGet("YOUR_SCRIPT_URL_HERE"))()
-            ]])
-            WindUI:Notify({ Title = "Auto Execute", Content = "Auto Execute enabled successfully!", Duration = 3 })
-        else
-            WindUI:Notify({ Title = "Auto Execute", Content = state and "Executor doesn't support queue_on_teleport!" or "Auto Execute disabled.", Duration = 4 })
+ConfigureTab:Input({
+    Title = "Configuration Name",
+    Desc = "Type a name for your configuration",
+    Placeholder = "MyConfig...",
+    Callback = function(text)
+        if text ~= "" then
+            configInputName = text
         end
     end,
 })
 
 ConfigureTab:Button({
-    Title = "Save Current Configuration",
-    Desc = "Saves your active settings (Auto Cat Click, Delays, etc.)",
+    Title = "Save Configuration",
+    Desc = "Saves all your currently enabled toggles and settings to the typed name",
+    Callback = function()
+        saveConfiguration(configInputName)
+    end,
+})
+
+ConfigureTab:Dropdown({
+    Title = "Select Configuration",
+    Desc = "Choose an existing configuration file",
+    Values = getSavedConfigsList(),
+    Default = "DefaultConfig",
+    Callback = function(selected)
+        selectedConfigDropdown = selected
+    end,
+})
+
+ConfigureTab:Button({
+    Title = "Load Selected Configuration",
+    Desc = "Loads the settings from the selected configuration dropdown",
+    Callback = function()
+        loadConfiguration(selectedConfigDropdown)
+    end,
+})
+
+ConfigureTab:Section({ Title = "Auto Load Configuration Setting" })
+
+ConfigureTab:Input({
+    Title = "What Configuration You Need to Auto Load",
+    Desc = "Enter the exact configuration name to load automatically on script execution",
+    Placeholder = "ConfigName...",
+    Callback = function(text)
+        autoLoadConfigName = text
+    end,
+})
+
+ConfigureTab:Button({
+    Title = "Set Auto Load Configuration",
+    Desc = "Saves this configuration to auto-load every time you run the script",
     Callback = function()
         if writefile then
-            local successSave, err = pcall(function()
-                local httpService = game:GetService("HttpService")
-                local encoded = httpService:JSONEncode(getgenv().BoostHubConfig)
-                writefile("BoostHubConfig.json", encoded)
+            pcall(function()
+                if makefolder and not pcall(function() listfiles("BoostHubConfigs") end) then
+                    makefolder("BoostHubConfigs")
+                end
+                writefile("BoostHubConfigs/AutoLoadConfig.json", autoLoadConfigName)
+                WindUI:Notify({ Title = "Auto Load Saved", Content = "Will auto-load configuration: " .. autoLoadConfigName, Duration = 3 })
             end)
-            if successSave then
-                WindUI:Notify({ Title = "Config Saved", Content = "Successfully saved your settings!", Duration = 3 })
-            else
-                WindUI:Notify({ Title = "Error", Content = "Failed to write config file.", Duration = 3 })
-            end
         else
-            WindUI:Notify({ Title = "Error", Content = "Your executor does not support writefile!", Duration = 3 })
+            WindUI:Notify({ Title = "Error", Content = "Executor does not support writefile!", Duration = 3 })
         end
     end,
 })
