@@ -2,19 +2,13 @@
 --                     BOOST HUB - WIND UI TEMPLATE
 -- =============================================================
 
--- Loading Library
+-- SAFE LOAD WIND UI LIBRARY
 local success, WindUI = pcall(function()
-    -- Standard Method
-    if syn and syn.request then
-        return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-    else
-        -- Another variant for Mobile Users
-        return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-    end
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 end)
 
 if not success or not WindUI then
-    -- If Your Executor or Your device doesn't support WindUi then you will see this message
+    -- Fallback notification if UI fails to load
     local gui = Instance.new("ScreenGui", game.CoreGui)
     local label = Instance.new("TextLabel", gui)
     label.Size = UDim2.new(1, 0, 0, 50)
@@ -32,7 +26,7 @@ local TARGET_PLACE_ID = 12069083555
 if game.PlaceId ~= TARGET_PLACE_ID then
     WindUI:Notify({
         Title = "Wrong Game!",
-        Content = "Wrong Game! Are you sure that you are playing PLS WAIT? ",
+        Content = "Wrong Game! Are you sure that you are playing PLS WAIT?",
         Duration = 10
     })
     return
@@ -83,7 +77,7 @@ local autoChatMessages = {
 local autoBegSayEnabled = true
 local autoBegMessageTemplate = "Hello %s, would you like to donate me? Any donation is highly appreciated :D"
 
--- 2. CREATE MAIN WINDOW (WITH DUAL-KEY SUPPORT)
+-- CREATE MAIN WINDOW (WITH DUAL-KEY SUPPORT)
 local Window = WindUI:CreateWindow({
     Title = "Boost Hub",
     SubTitle = "v1.0.0 | made by xeavz",
@@ -107,7 +101,7 @@ local Window = WindUI:CreateWindow({
     }
 })
 
--- 3. CREATE TABS
+-- CREATE TABS
 local MainTab = Window:Tab({ Title = "Main", Icon = "house" })
 local FarmTab = Window:Tab({ Title = "Farm", Icon = "zap" })
 local EventsTab = Window:Tab({ Title = "Events", Icon = "sparkles" })
@@ -194,7 +188,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Fixed mobile executor loading error\n[-] Character faces target player, waits 25s, and tracks movement",
+            Content = "[-] Cleaned localization and fixed developer credit styling\n[-] Character faces target player, waits 25s, and tracks movement",
             Duration = 8
         })
     end,
@@ -1111,7 +1105,7 @@ AutomationTab:Toggle({
                     -- Force walk speed to 23 during Auto Beg
                     humanoid.WalkSpeed = 23
 
-                    -- 1. Check specifically for 'DonationSign' tool in character or backpack
+                    -- Check specifically for 'DonationSign' tool in character or backpack
                     local equippedTool = char:FindFirstChild("DonationSign")
                     if not equippedTool then
                         task.wait(1)
@@ -1148,7 +1142,7 @@ AutomationTab:Toggle({
                         end
                     end
 
-                    -- 2. Scan players for paid items (skipping visited and AFK players > 3 mins)
+                    -- Scan players for paid items (skipping visited and AFK players > 3 mins)
                     local targetPlayer = nil
                     for _, p in ipairs(game.Players:GetPlayers()) do
                         if p ~= player and not beggedPlayers[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -1214,7 +1208,6 @@ AutomationTab:Toggle({
                             local randomStuds = math.random(5, 7)
                             local destination = targetHrp.Position + (targetHrp.CFrame.LookVector * randomStuds)
 
-                            -- Check if player is already close enough (within destination range)
                             if (hrp.Position - targetHrp.Position).Magnitude <= 8 then
                                 successRoute = true
                                 break
@@ -1235,7 +1228,6 @@ AutomationTab:Toggle({
                                 local waypointIndex = 1
 
                                 while waypointIndex <= #waypoints and getgenv().AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
-                                    -- Live re-target check: if target ran away or teleported > 8 studs from destination, recalculate path
                                     local currentTargetPos = targetPlayer.Character.HumanoidRootPart.Position
                                     local currentDest = currentTargetPos + (targetPlayer.Character.HumanoidRootPart.CFrame.LookVector * randomStuds)
                                     if (destination - currentDest).Magnitude > 8 then
@@ -1310,16 +1302,14 @@ AutomationTab:Toggle({
                             if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
                                 local targetHrp = targetPlayer.Character.HumanoidRootPart
                                 
-                                -- Face the player directly (keeping same Y level to prevent tilting)
                                 local lookAtPos = Vector3.new(targetHrp.Position.X, hrp.Position.Y, targetHrp.Position.Z)
                                 hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
 
-                                -- If player walks away or teleports > 10 studs during the 25s wait, follow them!
                                 if (hrp.Position - targetHrp.Position).Magnitude > 10 then
                                     humanoid:MoveTo(targetHrp.Position)
                                 end
                             else
-                                break -- Player left server or reset
+                                break 
                             end
                             task.wait(0.5)
                             elapsed = elapsed + 0.5
@@ -1339,7 +1329,6 @@ AutomationTab:Toggle({
                     end
                 end
 
-                -- Reset speed back to normal when toggled off
                 local currentLocalChar = game.Players.LocalPlayer.Character
                 if currentLocalChar and currentLocalChar:FindFirstChildOfClass("Humanoid") then
                     currentLocalChar.Humanoid.WalkSpeed = 16
@@ -1939,7 +1928,7 @@ OtherTab:Button({
 SettingsTab:Section({ Title = "Developer Info" })
 
 SettingsTab:Button({
-    Title = '<font color="#00ff00">Was Made By Xeavz</Font>',
+    Title = '<font color="#00ff00">Was Made By Xeavz</font>',
     Desc = "Script Maker | UI Developer",
     Callback = function()
         WindUI:Notify({ Title = "Boost Hub", Content = "Thanks for using Boost Hub by Xeavz!", Duration = 3 })
