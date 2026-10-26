@@ -213,7 +213,7 @@ local function loadConfiguration(configName)
             getgenv().AntiBanEnabled = data.AntiBanEnabled ~= false
             getgenv().BoostHubConfig.AntiBanEnabled = getgenv().AntiBanEnabled
             getgenv().AutoChatSpam = data.AutoChatSpam or false
-            getgenv().BoostHubConfig.AutoChatSpam = getgenv().AutoChatSpam
+            getgenv().BoostHubConfig.AutoChatSpam = getgenv().BoostHubConfig.AutoChatSpam
             getgenv().BoostHubConfig.CatClickDelay = data.CatClickDelay or 100
             getgenv().CatClickDelay = getgenv().BoostHubConfig.CatClickDelay / 1000
             getgenv().BoostHubConfig.RNGDelay = data.RNGDelay or 15
@@ -342,12 +342,11 @@ local function HasClaimedStand()
     local manualName = string.lower(localPlayer.DisplayName)
 
     for _, obj in pairs(workspace:GetDescendants()) do
-        -- Skip character model, tools, CoreGui, and local scripts
         if not obj:IsDescendantOf(localPlayer.Character or instance) and 
            not obj:IsDescendantOf(game:GetService("CoreGui")) and 
            not obj:IsA("Tool") then
 
-            if obj:IsA("TextLabel") or obj:IsA("SurfaceGui") or obj:IsA("BillboardGui") then
+            if obj:IsA("TextLabel") or obj:IsA("TextBox") then
                 local text = string.lower(obj.Text or "")
                 if string.find(text, manualName) then
                     local parentName = string.lower(obj.Parent.Name)
@@ -363,7 +362,7 @@ local function HasClaimedStand()
     return false
 end
 
--- HELPER FUNCTION TO EXECUTE STAND CLAIMING LOGIC
+-- HELPER FUNCTION TO EXECUTE STAND CLAIMING LOGIC (TELEPORTS TO BASEEMITTER & HOLDS PROXIMITY PROMPT)
 local function AttemptClaimStand()
     if HasClaimedStand() then
         return false
@@ -376,40 +375,59 @@ local function AttemptClaimStand()
     local hrp = char.HumanoidRootPart
     local originalCFrame = hrp.CFrame
 
-    local prompts = {}
+    local emitters = {}
     for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") and obj.Enabled then
-            local actionText = string.lower(obj.ActionText or "")
-            local objectText = string.lower(obj.ObjectText or "")
-            if string.find(actionText, "claim") or string.find(objectText, "claim") or string.find(actionText, "stand") or string.find(objectText, "stand") then
-                table.insert(prompts, obj)
+        if obj:IsA("BasePart") then
+            local nameLower = string.lower(obj.Name)
+            if string.find(nameLower, "baseemitter") or string.find(nameLower, "stand") then
+                table.insert(emitters, obj)
             end
         end
     end
 
-    if #prompts == 0 then
+    if #emitters == 0 then
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and not obj:IsDescendantOf(char) then
+                table.insert(emitters, obj)
+            end
+        end
+    end
+
+    if #emitters == 0 then
         return false
     end
 
-    for i = #prompts, 2, -1 do
+    for i = #emitters, 2, -1 do
         local j = math.random(1, i)
-        prompts[i], prompts[j] = prompts[j], prompts[i]
+        emitters[i], emitters[j] = emitters[j], emitters[i]
     end
 
     local claimed = false
-    for _, prompt in ipairs(prompts) do
-        if prompt and prompt.Parent then
-            local targetPart = nil
-            if prompt.Parent:IsA("BasePart") then
-                targetPart = prompt.Parent
-            elseif prompt.Parent:IsA("Model") then
-                targetPart = prompt.Parent.PrimaryPart or prompt.Parent:FindFirstChildWhichIsA("BasePart")
+    for _, targetPart in ipairs(emitters) do
+        if targetPart and targetPart.Parent then
+            hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+            task.wait(0.4)
+
+            local prompt = nil
+            for _, desc in pairs(targetPart.Parent:GetDescendants()) do
+                if desc:IsA("ProximityPrompt") and desc.Enabled then
+                    prompt = desc
+                    break
+                end
+            end
+            if not prompt then
+                for _, desc in pairs(workspace:GetDescendants()) do
+                    if desc:IsA("ProximityPrompt") and desc.Enabled then
+                        local pPart = desc.Parent
+                        if pPart and pPart:IsA("BasePart") and (pPart.Position - targetPart.Position).Magnitude < 15 then
+                            prompt = desc
+                            break
+                        end
+                    end
+                end
             end
 
-            if targetPart then
-                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
-                task.wait(0.5)
-
+            if prompt then
                 if fireproximityprompt then
                     fireproximityprompt(prompt)
                 else
@@ -447,7 +465,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Added Auto Claim Stand feature (uses Display Name, checks if stand already exists)\n[-] Added automatic anti-admin detection and server hop protection",
+            Content = "[-] Fixed SurfaceGui text error\n[-] Updated Auto Claim Stand to teleport to BaseEmitter parts and check for ProximityPrompts",
             Duration = 8
         })
     end,
@@ -1222,7 +1240,7 @@ AutomationTab:Toggle({
 
 AutomationTab:Button({
     Title = "Claim Stand",
-    Desc = "Scans all ProximityPrompts, teleports to stand, and stays for 2 seconds",
+    Desc = "Teleports to BaseEmitter/Stand, checks for ProximityPrompt, and claims it",
     Callback = function()
         if not getgenv().AntiBanEnabled then
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
