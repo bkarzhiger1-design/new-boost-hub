@@ -175,7 +175,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Reworked Auto Beg into a toggleable feature targeting paid-item avatars\n[-] Configured 5-7 studs front positioning and 15s character reset cycle",
+            Content = "[-] Updated Auto Beg to use PathfindingService (Character walks instead of teleporting)\n[-] All tabs and features fully loaded",
             Duration = 8
         })
     end,
@@ -486,7 +486,7 @@ MainTab:Button({
             local myChar = game.Players.LocalPlayer.Character
             if myChar and myChar:FindFirstChild("HumanoidRootPart") then
                 myChar.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
-                WindUI:Notify({ Title = "Teleported", Content = "Teleported to " + targetPlayer.DisplayName, Duration = 3 })
+                WindUI:Notify({ Title = "Teleported", Content = "Teleported to " .. targetPlayer.DisplayName, Duration = 3 })
             end
         else
             WindUI:Notify({ Title = "Error", Content = "Player not found or character missing!", Duration = 3 })
@@ -1032,10 +1032,10 @@ AutomationTab:Button({
     end,
 })
 
--- AUTO BEG TOGGLE (REWORKED)
+-- AUTO BEG TOGGLE (PATHFINDING WALKING MODE)
 AutomationTab:Toggle({
     Title = "Auto Beg",
-    Desc = "Automatically targets players with paid items, stands 5-7 studs in front, and cycles every 15s",
+    Desc = "Pathfinds and walks to players with paid items, stopping 5-7 studs in front",
     Value = getgenv().BoostHubConfig.AutoBeg,
     Callback = function(state)
         getgenv().AutoBeg = state
@@ -1046,9 +1046,11 @@ AutomationTab:Toggle({
                 WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             end
 
-            WindUI:Notify({ Title = "Auto Beg", Content = "Auto Beg started!", Duration = 3 })
+            WindUI:Notify({ Title = "Auto Beg", Content = "Auto Beg pathfinding started!", Duration = 3 })
 
             task.spawn(function()
+                local PathfindingService = game:GetService("PathfindingService")
+
                 while getgenv().AutoBeg do
                     local player = game.Players.LocalPlayer
                     local char = player.Character
@@ -1057,13 +1059,15 @@ AutomationTab:Toggle({
                         continue
                     end
 
+                    local hrp = char.HumanoidRootPart
+                    local humanoid = char.Humanoid
+
                     -- 1. Check if holding a tool
                     local equippedTool = char:FindFirstChildOfClass("Tool")
                     if not equippedTool then
-                        -- Check backpack
                         local backpackTool = player.Backpack and player.Backpack:FindFirstChildOfClass("Tool")
                         if backpackTool then
-                            char.Humanoid:EquipTool(backpackTool)
+                            humanoid:EquipTool(backpackTool)
                             task.wait(0.5)
                             equippedTool = char:FindFirstChildOfClass("Tool")
                         end
@@ -1076,7 +1080,7 @@ AutomationTab:Toggle({
                         break
                     end
 
-                    -- 2. Scan players for paid items (Accessory, Clothing, etc.)
+                    -- 2. Scan players for paid items
                     local targetPlayer = nil
                     for _, p in ipairs(game.Players:GetPlayers()) do
                         if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -1094,23 +1098,54 @@ AutomationTab:Toggle({
                         end
                     end
 
-                    local hrp = char.HumanoidRootPart
-
                     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        -- Found a player with paid items: position 5-7 studs in front of them
                         local targetHrp = targetPlayer.Character.HumanoidRootPart
                         local randomStuds = math.random(5, 7)
-                        -- Position in front based on target's look vector
-                        hrp.CFrame = targetHrp.CFrame + (targetHrp.CFrame.LookVector * randomStuds) + Vector3.new(0, 0, 0)
+                        local destination = targetHrp.Position + (targetHrp.CFrame.LookVector * randomStuds)
+
+                        -- Pathfinding Walk Route
+                        local path = PathfindingService:CreatePath({
+                            AgentRadius = 2,
+                            AgentHeight = 5,
+                            AgentCanJump = true
+                        })
+
+                        local success = pcall(function()
+                            path:ComputeAsync(hrp.Position, destination)
+                        end)
+
+                        if success and path.Status == Enum.PathStatus.Success then
+                            local waypoints = path:GetWaypoints()
+                            for _, waypoint in ipairs(waypoints) do
+                                if not getgenv().AutoBeg then break end
+                                humanoid:MoveTo(waypoint.Position)
+                                if waypoint.Action == Enum.PathWaypointAction.Jump then
+                                    humanoid.Jump = true
+                                end
+                                
+                                local reached = false
+                                local conn
+                                conn = humanoid.MoveToFinished:Connect(function()
+                                    reached = true
+                                    if conn then conn:Disconnect() end
+                                end)
+
+                                local startWait = tick()
+                                while not reached and tick() - startWait < 1.5 and getgenv().AutoBeg do
+                                    task.wait(0.1)
+                                end
+                                if conn then conn:Disconnect() end
+                            end
+                        else
+                            -- Fallback direct move if pathfinding fails
+                            humanoid:MoveTo(destination)
+                        end
                     else
-                        -- No players with items found: tp to SpawnLocation and wait
+                        -- No players with items found: walk to SpawnLocation and wait
                         local spawnLoc = workspace:FindFirstChild("SpawnLocation", true)
                         if spawnLoc then
-                            if spawnLoc:IsA("Model") then
-                                hrp.CFrame = spawnLoc:GetPivot() + Vector3.new(0, 3, 0)
-                            elseif spawnLoc:IsA("BasePart") then
-                                hrp.CFrame = spawnLoc.CFrame + Vector3.new(0, 3, 0)
-                            end
+                            local spawnPos = spawnLoc:IsA("Model") and spawnLoc:GetPivot().Position or spawnLoc.Position
+                            humanoid:MoveTo(spawnPos)
                         end
                     end
 
