@@ -38,6 +38,7 @@ getgenv().BoostHubConfig = getgenv().BoostHubConfig or {
     AutoGoal = false,
     AutoCollectOrbs = false,
     AutoBeg = false,
+    AutoClaimStand = false,
     AntiBanEnabled = true,
     AutoChatSpam = false,
     CatClickDelay = 100,
@@ -100,7 +101,6 @@ local function checkAndHopForAdmins(player)
             })
             task.wait(1.5)
             
-            -- Perform automatic server hop
             local placeId = game.PlaceId
             local servers = {}
             local req = (syn and syn.request) or (http and http.request) or http_request or request
@@ -153,7 +153,7 @@ local function getSavedConfigsList()
             local files = listfiles("BoostHubConfigs")
             for _, file in ipairs(files) do
                 local name = file:match("([^/]+)$")
-                name = name:match("([^\]+)$") -- handles backslashes on Windows executors
+                name = name:match("([^\]+)$")
                 if name and name:sub(-5) == ".json" then
                     local configName = name:sub(1, -6)
                     table.insert(list, configName)
@@ -179,6 +179,7 @@ local function saveConfiguration(configName)
             AutoGoal = getgenv().BoostHubConfig.AutoGoal,
             AutoCollectOrbs = getgenv().BoostHubConfig.AutoCollectOrbs,
             AutoBeg = getgenv().BoostHubConfig.AutoBeg,
+            AutoClaimStand = getgenv().BoostHubConfig.AutoClaimStand,
             AntiBanEnabled = getgenv().AntiBanEnabled,
             AutoChatSpam = getgenv().BoostHubConfig.AutoChatSpam,
             CatClickDelay = getgenv().BoostHubConfig.CatClickDelay,
@@ -208,6 +209,7 @@ local function loadConfiguration(configName)
             getgenv().BoostHubConfig.AutoGoal = data.AutoGoal or false
             getgenv().BoostHubConfig.AutoCollectOrbs = data.AutoCollectOrbs or false
             getgenv().BoostHubConfig.AutoBeg = data.AutoBeg or false
+            getgenv().BoostHubConfig.AutoClaimStand = data.AutoClaimStand or false
             getgenv().AntiBanEnabled = data.AntiBanEnabled ~= false
             getgenv().BoostHubConfig.AntiBanEnabled = getgenv().AntiBanEnabled
             getgenv().AutoChatSpam = data.AutoChatSpam or false
@@ -316,7 +318,7 @@ local function TryTeleportToPlayer(username, roleName)
     return false
 end
 
--- Helper Function for Chat Messages (Supports Modern & Legacy Chat)
+-- Helper Function for Chat Messages
 local function SendChatMessage(msg)
     local TextChatService = game:GetService("TextChatService")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -334,6 +336,106 @@ local function SendChatMessage(msg)
     end
 end
 
+-- HELPER FUNCTION TO CHECK IF STAND ALREADY BELONGS TO PLAYER (USING DISPLAY NAME)
+local function HasClaimedStand()
+    local localPlayer = Players.LocalPlayer
+    local manualName = string.lower(localPlayer.DisplayName)
+
+    for _, obj in pairs(workspace:GetDescendants()) do
+        -- Skip character model, tools, CoreGui, and local scripts
+        if not obj:IsDescendantOf(localPlayer.Character or instance) and 
+           not obj:IsDescendantOf(game:GetService("CoreGui")) and 
+           not obj:IsA("Tool") then
+
+            if obj:IsA("TextLabel") or obj:IsA("SurfaceGui") or obj:IsA("BillboardGui") then
+                local text = string.lower(obj.Text or "")
+                if string.find(text, manualName) then
+                    local parentName = string.lower(obj.Parent.Name)
+                    local grandParentName = obj.Parent.Parent and string.lower(obj.Parent.Parent.Name) or ""
+                    
+                    if string.find(parentName, "stand") or string.find(grandParentName, "stand") or string.find(text, "stand") then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- HELPER FUNCTION TO EXECUTE STAND CLAIMING LOGIC
+local function AttemptClaimStand()
+    if HasClaimedStand() then
+        return false
+    end
+
+    local player = Players.LocalPlayer
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
+
+    local hrp = char.HumanoidRootPart
+    local originalCFrame = hrp.CFrame
+
+    local prompts = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") and obj.Enabled then
+            local actionText = string.lower(obj.ActionText or "")
+            local objectText = string.lower(obj.ObjectText or "")
+            if string.find(actionText, "claim") or string.find(objectText, "claim") or string.find(actionText, "stand") or string.find(objectText, "stand") then
+                table.insert(prompts, obj)
+            end
+        end
+    end
+
+    if #prompts == 0 then
+        return false
+    end
+
+    for i = #prompts, 2, -1 do
+        local j = math.random(1, i)
+        prompts[i], prompts[j] = prompts[j], prompts[i]
+    end
+
+    local claimed = false
+    for _, prompt in ipairs(prompts) do
+        if prompt and prompt.Parent then
+            local targetPart = nil
+            if prompt.Parent:IsA("BasePart") then
+                targetPart = prompt.Parent
+            elseif prompt.Parent:IsA("Model") then
+                targetPart = prompt.Parent.PrimaryPart or prompt.Parent:FindFirstChildWhichIsA("BasePart")
+            end
+
+            if targetPart then
+                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+                task.wait(0.5)
+
+                if fireproximityprompt then
+                    fireproximityprompt(prompt)
+                else
+                    prompt:InputHoldBegin()
+                    task.wait(0.1)
+                    prompt:InputHoldEnd()
+                end
+
+                local startTime = tick()
+                while tick() - startTime < 2 do
+                    if hrp and targetPart then
+                        hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+                    end
+                    task.wait(0.2)
+                end
+
+                claimed = true
+                break
+            end
+        end
+    end
+
+    hrp.CFrame = originalCFrame
+    return claimed
+end
+
 -- =============================================================
 --                        1. MAIN TAB
 -- =============================================================
@@ -345,7 +447,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Added fully functional Configuration System (Save, Choose, Auto-Load)\n[-] Added automatic anti-admin detection and server hop protection",
+            Content = "[-] Added Auto Claim Stand feature (uses Display Name, checks if stand already exists)\n[-] Added automatic anti-admin detection and server hop protection",
             Duration = 8
         })
     end,
@@ -1126,78 +1228,43 @@ AutomationTab:Button({
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
         end
 
-        local player = game.Players.LocalPlayer
-        local char = player.Character
-        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-
-        local hrp = char.HumanoidRootPart
-        local originalCFrame = hrp.CFrame
-
-        local prompts = {}
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("ProximityPrompt") and obj.Enabled then
-                local actionText = string.lower(obj.ActionText or "")
-                local objectText = string.lower(obj.ObjectText or "")
-                if string.find(actionText, "claim") or string.find(objectText, "claim") or string.find(actionText, "stand") or string.find(objectText, "stand") then
-                    table.insert(prompts, obj)
-                end
-            end
-        end
-
-        if #prompts == 0 then
-            WindUI:Notify({ Title = "Claim Stand", Content = "No claimable stand prompts found in workspace!", Duration = 4 })
-            return
-        end
-
-        for i = #prompts, 2, -1 do
-            local j = math.random(1, i)
-            prompts[i], prompts[j] = prompts[j], prompts[i]
-        end
-
-        local claimed = false
-        for _, prompt in ipairs(prompts) do
-            if prompt and prompt.Parent then
-                local targetPart = nil
-                if prompt.Parent:IsA("BasePart") then
-                    targetPart = prompt.Parent
-                elseif prompt.Parent:IsA("Model") then
-                    targetPart = prompt.Parent.PrimaryPart or prompt.Parent:FindFirstChildWhichIsA("BasePart")
-                end
-
-                if targetPart then
-                    hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
-                    task.wait(0.5)
-
-                    WindUI:Notify({ Title = "Claim Stand", Content = "Claiming stand! Holding position for 2 seconds...", Duration = 3 })
-
-                    if fireproximityprompt then
-                        fireproximityprompt(prompt)
-                    else
-                        prompt:InputHoldBegin()
-                        task.wait(0.1)
-                        prompt:InputHoldEnd()
-                    end
-
-                    local startTime = tick()
-                    while tick() - startTime < 2 do
-                        if hrp and targetPart then
-                            hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
-                        end
-                        task.wait(0.2)
-                    end
-
-                    claimed = true
-                    break
-                end
-            end
-        end
-
-        hrp.CFrame = originalCFrame
-
-        if claimed then
+        local successClaim = AttemptClaimStand()
+        if successClaim then
             WindUI:Notify({ Title = "Claim Stand", Content = "Successfully claimed stand and returned!", Duration = 3 })
         else
-            WindUI:Notify({ Title = "Claim Stand", Content = "Could not locate a physical part to teleport to!", Duration = 4 })
+            if HasClaimedStand() then
+                WindUI:Notify({ Title = "Claim Stand", Content = "You already own a stand!", Duration = 4 })
+            else
+                WindUI:Notify({ Title = "Claim Stand", Content = "Could not locate a claimable stand!", Duration = 4 })
+            end
+        end
+    end,
+})
+
+AutomationTab:Toggle({
+    Title = "Auto Claim Stand",
+    Desc = "Automatically checks if you own a stand (by Display Name) and claims one if you don't",
+    Value = getgenv().BoostHubConfig.AutoClaimStand,
+    Callback = function(state)
+        getgenv().BoostHubConfig.AutoClaimStand = state
+
+        if state then
+            if not getgenv().AntiBanEnabled then
+                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+            end
+
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Auto Claim Stand enabled! Checking stand status...", Duration = 3 })
+
+            task.spawn(function()
+                while getgenv().BoostHubConfig.AutoClaimStand do
+                    if not HasClaimedStand() then
+                        AttemptClaimStand()
+                    end
+                    task.wait(5)
+                end
+            end)
+        else
+            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Auto Claim Stand disabled.", Duration = 3 })
         end
     end,
 })
@@ -1984,7 +2051,7 @@ VisualTab:Button({
 })
 
 -- =============================================================
---                    9. CONFIGURE TAB (FULLY FUNCTIONAL CONFIG SYSTEM)
+--                    9. CONFIGURE TAB
 -- =============================================================
 ConfigureTab:Section({ Title = "Configuration Manager" })
 
