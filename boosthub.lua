@@ -175,7 +175,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Updated Auto Beg to use PathfindingService (Character walks instead of teleporting)\n[-] All tabs and features fully loaded",
+            Content = "[-] Added tool loading buffer delay after character respawn for Auto Beg\n[-] All tabs and features fully loaded",
             Duration = 8
         })
     end,
@@ -1032,7 +1032,7 @@ AutomationTab:Button({
     end,
 })
 
--- AUTO BEG TOGGLE (PATHFINDING WALKING MODE)
+-- AUTO BEG TOGGLE (PATHFINDING WALKING MODE + TOOL BUFFER FIX)
 AutomationTab:Toggle({
     Title = "Auto Beg",
     Desc = "Pathfinds and walks to players with paid items, stopping 5-7 studs in front",
@@ -1051,6 +1051,9 @@ AutomationTab:Toggle({
             task.spawn(function()
                 local PathfindingService = game:GetService("PathfindingService")
 
+                -- Buffer delay on startup/respawn to let inventory load the tool
+                task.wait(2.5)
+
                 while getgenv().AutoBeg do
                     local player = game.Players.LocalPlayer
                     local char = player.Character
@@ -1062,13 +1065,14 @@ AutomationTab:Toggle({
                     local hrp = char.HumanoidRootPart
                     local humanoid = char.Humanoid
 
-                    -- 1. Check if holding a tool
+                    -- 1. Check if holding a tool (with backpack fallback and retry buffer)
                     local equippedTool = char:FindFirstChildOfClass("Tool")
                     if not equippedTool then
+                        task.wait(1) -- Extra second to ensure backpack items loaded after reset
                         local backpackTool = player.Backpack and player.Backpack:FindFirstChildOfClass("Tool")
                         if backpackTool then
                             humanoid:EquipTool(backpackTool)
-                            task.wait(0.5)
+                            task.wait(0.8)
                             equippedTool = char:FindFirstChildOfClass("Tool")
                         end
                     end
@@ -1158,7 +1162,7 @@ AutomationTab:Toggle({
 
                     if getgenv().AutoBeg and char and char:FindFirstChildOfClass("Humanoid") then
                         char.Humanoid.Health = 0 -- Reset character
-                        task.wait(2) -- Wait for respawn
+                        task.wait(2.5) -- Wait for respawn and tool loading buffer
                     end
                 end
             end)
