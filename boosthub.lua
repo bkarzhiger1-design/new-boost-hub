@@ -175,7 +175,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Increased Auto Chat Spammer delay to 25s\n[-] Added AFK player filter (skips players staying still > 3 mins) for Auto Beg",
+            Content = "[-] Added targeted player greeting chat message to Auto Beg",
             Duration = 8
         })
     end,
@@ -1032,10 +1032,10 @@ AutomationTab:Button({
     end,
 })
 
--- AUTO BEG TOGGLE (PATHFINDING + PLAYER TRACKING + ANTI-STUCK + AFK PLAYER FILTER > 3 MINS)
+-- AUTO BEG TOGGLE (PATHFINDING + PLAYER TRACKING + ANTI-STUCK + AFK FILTER + TARGET GREETING)
 AutomationTab:Toggle({
     Title = "Auto Beg",
-    Desc = "Pathfinds to active paid-item players, skips AFK players (>3m still), and resets if stuck",
+    Desc = "Pathfinds to active players, greets them by name, skips AFK > 3m, and resets if stuck",
     Value = getgenv().BoostHubConfig.AutoBeg,
     Callback = function(state)
         getgenv().AutoBeg = state
@@ -1224,6 +1224,12 @@ AutomationTab:Toggle({
                             end
                         else
                             humanoid:MoveTo(destination)
+                        end
+
+                        -- Send targeted greeting message to chat once arrived near the player
+                        if getgenv().AutoBeg and targetPlayer and targetPlayer.Name then
+                            local greetingMsg = string.format("Hello %s, would you like to donate me? Any donation is highly appreciated :D", targetPlayer.Name)
+                            SendChatMessage(greetingMsg)
                         end
                     else
                         -- No active players with items found: walk to SpawnLocation and wait
