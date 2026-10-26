@@ -146,8 +146,9 @@ Players.PlayerAdded:Connect(function(p)
     checkAndHopForAdmins(p)
 end)
 
--- FORWARD DECLARATIONS FOR UI CALLBACKS
+-- FORWARD DECLARATIONS FOR UI CALLBACKS & HANDLERS
 local updateTogglesAndSettings
+local applyAutoCatClick, applyAutoRNG, applyAutoGoal, applyAutoCollectOrbs, applyAutoClaimStand, applyAutoBeg, applyAutoChatSpam, applyDisable3DRender
 
 -- CONFIGURATION SYSTEM FUNCTIONS
 local function getSavedConfigsList()
@@ -211,17 +212,18 @@ local function loadConfiguration(configName)
             return HttpService:JSONDecode(content)
         end)
         if successDecode and type(data) == "table" then
-            getgenv().BoostHubConfig.AutoCatClick = data.AutoCatClick or false
-            getgenv().BoostHubConfig.AutoRNG = data.AutoRNG or false
-            getgenv().BoostHubConfig.AutoGoal = data.AutoGoal or false
-            getgenv().BoostHubConfig.AutoCollectOrbs = data.AutoCollectOrbs or false
-            getgenv().BoostHubConfig.AutoBeg = data.AutoBeg or false
-            getgenv().BoostHubConfig.AutoClaimStand = data.AutoClaimStand or false
+            -- Apply settings and restart feature loops
+            applyAutoCatClick(data.AutoCatClick or false)
+            applyAutoRNG(data.AutoRNG or false)
+            applyAutoGoal(data.AutoGoal or false)
+            applyAutoCollectOrbs(data.AutoCollectOrbs or false)
+            applyAutoClaimStand(data.AutoClaimStand or false)
+            applyAutoBeg(data.AutoBeg or false)
+            applyAutoChatSpam(data.AutoChatSpam or false)
+            applyDisable3DRender(data.Disable3DRender or false)
+
             getgenv().AntiBanEnabled = data.AntiBanEnabled ~= false
             getgenv().BoostHubConfig.AntiBanEnabled = getgenv().AntiBanEnabled
-            getgenv().AutoChatSpam = data.AutoChatSpam or false
-            getgenv().BoostHubConfig.AutoChatSpam = getgenv().BoostHubConfig.AutoChatSpam
-            getgenv().BoostHubConfig.Disable3DRender = data.Disable3DRender or false
             getgenv().BoostHubConfig.WalkSpeed = data.WalkSpeed or 16
             getgenv().BoostHubConfig.JumpPower = data.JumpPower or 50
             getgenv().BoostHubConfig.CatClickDelay = data.CatClickDelay or 100
@@ -233,6 +235,16 @@ local function loadConfiguration(configName)
                 autoBegMessageTemplate = data.AutoBegMessage
             end
             getgenv().BoostHubConfig.AutoExecuteEnabled = data.AutoExecuteEnabled or false
+
+            -- Apply WalkSpeed & JumpPower to character
+            pcall(function()
+                local char = game.Players.LocalPlayer.Character
+                if char and char:FindFirstChild("Humanoid") then
+                    char.Humanoid.WalkSpeed = getgenv().BoostHubConfig.WalkSpeed
+                    char.Humanoid.UseJumpPower = true
+                    char.Humanoid.JumpPower = getgenv().BoostHubConfig.JumpPower
+                end
+            end)
             
             if updateTogglesAndSettings then
                 updateTogglesAndSettings()
@@ -363,7 +375,6 @@ local function HasClaimedStand()
                     local parentName = string.lower(obj.Parent.Name)
                     local grandParentName = obj.Parent.Parent and string.lower(obj.Parent.Parent.Name) or ""
                     
-                    -- Ensure it's a stand and NOT a shop
                     if (string.find(parentName, "stand") or string.find(grandParentName, "stand") or string.find(text, "stand")) and
                        not string.find(parentName, "shop") and not string.find(grandParentName, "shop") then
                         return true
@@ -461,7 +472,6 @@ local function AttemptClaimStand()
                     task.wait(0.2)
                 end
 
-                -- RE-CHECK STAND OWNERSHIP TO PREVENT FALSE POSITIVES FROM SHOP STANDS
                 task.wait(1)
                 if HasClaimedStand() then
                     claimed = true
@@ -486,7 +496,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Fixed configuration saving for all toggles and sliders\n[-] Fixed auto-load behavior so loaded features run instantly\n[-] Added strict stand validation to prevent shop stand false positives",
+            Content = "[-] Fixed configuration loading logic to start all feature loops instantly\n[-] Added strict stand validation to prevent shop stand false positives",
             Duration = 8
         })
     end,
@@ -527,19 +537,21 @@ local jumpPowerSlider = MainTab:Slider({
 
 MainTab:Section({ Title = "Performance Settings" })
 
+applyDisable3DRender = function(state)
+    getgenv().BoostHubConfig.Disable3DRender = state
+    local runService = game:GetService("RunService")
+    if runService.Set3dRenderingEnabled then
+        runService:Set3dRenderingEnabled(not state)
+    end
+end
+
 local renderToggle = MainTab:Toggle({
     Title = "Disable 3D Render",
     Desc = "Pauses 3D rendering completely for max performance/FPS while AFK",
     Value = getgenv().BoostHubConfig.Disable3DRender,
     Callback = function(state)
-        getgenv().BoostHubConfig.Disable3DRender = state
-        local runService = game:GetService("RunService")
-        if runService.Set3dRenderingEnabled then
-            runService:Set3dRenderingEnabled(not state)
-            WindUI:Notify({ Title = "3D Render", Content = state and "3D Rendering Disabled!" or "3D Rendering Enabled!", Duration = 3 })
-        else
-            WindUI:Notify({ Title = "Error", Content = "Your executor does not support Set3dRenderingEnabled!", Duration = 3 })
-        end
+        applyDisable3DRender(state)
+        WindUI:Notify({ Title = "3D Render", Content = state and "3D Rendering Disabled!" or "3D Rendering Enabled!", Duration = 3 })
     end,
 })
 
@@ -865,31 +877,70 @@ local function loop(alvo)
     end
 end
 
+applyAutoCatClick = function(state)
+    getgenv().AutoCatClick = state
+    getgenv().BoostHubConfig.AutoCatClick = state
+    if state then
+        if not getgenv().AntiBanEnabled then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
+        local tgt = acharGato()
+        if tgt then
+            WindUI:Notify({ Title = "Auto Cat Click", Content = "Status: Successfully clicking! 🔥", Duration = 3 })
+            task.spawn(loop, tgt)
+            task.spawn(loop, tgt)
+        else
+            WindUI:Notify({ Title = "Auto Cat Click", Content = "Status: Cat target not found.", Duration = 3 })
+            getgenv().AutoCatClick = false
+            getgenv().BoostHubConfig.AutoCatClick = false
+        end
+    else
+        gato = nil
+    end
+end
+
 local catClickToggle = FarmTab:Toggle({
     Title = "Auto Cat Click",
     Desc = "Automatically searches and clicks targets using ClickDetector scanner",
     Value = getgenv().BoostHubConfig.AutoCatClick,
     Callback = function(state)
-        getgenv().AutoCatClick = state
-        getgenv().BoostHubConfig.AutoCatClick = state
-        if state then
-            if not getgenv().AntiBanEnabled then
-                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-            end
-            local tgt = acharGato()
-            if tgt then
-                WindUI:Notify({ Title = "Auto Cat Click", Content = "Status: Successfully clicking! 🔥", Duration = 3 })
-                task.spawn(loop, tgt)
-                task.spawn(loop, tgt)
-            else
-                WindUI:Notify({ Title = "Auto Cat Click", Content = "Status: Cat target not found.", Duration = 3 })
-                getgenv().AutoCatClick = false
-            end
-        else
-            gato = nil
-        end
+        applyAutoCatClick(state)
     end,
 })
+
+applyAutoRNG = function(state)
+    getgenv().AutoRNG = state
+    getgenv().BoostHubConfig.AutoRNG = state
+    if state then
+        if not getgenv().AntiBanEnabled then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
+        task.spawn(function()
+            while getgenv().AutoRNG do
+                local rngPart = workspace:FindFirstChild("RNGButton", true)
+                local char = game.Players.LocalPlayer.Character
+                
+                if rngPart and char and char:FindFirstChild("HumanoidRootPart") then
+                    if rngPart:IsA("Model") then
+                        char.HumanoidRootPart.CFrame = rngPart:GetPivot() + Vector3.new(0, 3, 0)
+                    elseif rngPart:IsA("BasePart") then
+                        char.HumanoidRootPart.CFrame = rngPart.CFrame + Vector3.new(0, 3, 0)
+                    end
+                end
+                
+                local delaySec = getgenv().RNGDelay or 15
+                if getgenv().AntiBanEnabled then
+                    delaySec = delaySec + math.random(1, 4)
+                end
+                local elapsed = 0
+                while elapsed < delaySec and getgenv().AutoRNG do
+                    task.wait(0.5)
+                    elapsed = elapsed + 0.5
+                end
+            end
+        end)
+    end
+end
 
 local rngToggle = FarmTab:Toggle({
     Title = "Auto RNG",
@@ -906,40 +957,45 @@ local rngToggle = FarmTab:Toggle({
             getgenv().BoostHubConfig.AutoRNG = false
             return
         end
-
-        getgenv().AutoRNG = state
-        getgenv().BoostHubConfig.AutoRNG = state
-        if state then
-            if not getgenv().AntiBanEnabled then
-                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-            end
-            task.spawn(function()
-                while getgenv().AutoRNG do
-                    local rngPart = workspace:FindFirstChild("RNGButton", true)
-                    local char = game.Players.LocalPlayer.Character
-                    
-                    if rngPart and char and char:FindFirstChild("HumanoidRootPart") then
-                        if rngPart:IsA("Model") then
-                            char.HumanoidRootPart.CFrame = rngPart:GetPivot() + Vector3.new(0, 3, 0)
-                        elseif rngPart:IsA("BasePart") then
-                            char.HumanoidRootPart.CFrame = rngPart.CFrame + Vector3.new(0, 3, 0)
-                        end
-                    end
-                    
-                    local delaySec = getgenv().RNGDelay or 15
-                    if getgenv().AntiBanEnabled then
-                        delaySec = delaySec + math.random(1, 4)
-                    end
-                    local elapsed = 0
-                    while elapsed < delaySec and getgenv().AutoRNG do
-                        task.wait(0.5)
-                        elapsed = elapsed + 0.5
-                    end
-                end
-            end)
-        end
+        applyAutoRNG(state)
     end,
 })
+
+applyAutoGoal = function(state)
+    getgenv().AutoGoal = state
+    getgenv().BoostHubConfig.AutoGoal = state
+
+    if not state then return end
+
+    if not getgenv().AntiBanEnabled then
+        WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+    end
+    
+    task.spawn(function()
+        while getgenv().AutoGoal do
+            local currentChar = game.Players.LocalPlayer.Character
+            local soccerBall = workspace:FindFirstChild("SoccerBall", true)
+            
+            if soccerBall and currentChar and currentChar:FindFirstChild("HumanoidRootPart") then
+                local hrp = currentChar.HumanoidRootPart
+                local ballPart = soccerBall:IsA("BasePart") and soccerBall or soccerBall:FindFirstChildWhichIsA("BasePart", true)
+                
+                if ballPart then
+                    hrp.CFrame = ballPart.CFrame + Vector3.new(0, 2, -3)
+                    
+                    if ballPart:IsA("BasePart") then
+                        ballPart.AssemblyLinearVelocity = Vector3.new(0, 5, 35)
+                    end
+                end
+            end
+            
+            local waitTime = math.random(30, 40) / 10
+            task.wait(waitTime)
+        end
+    end)
+    
+    WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal activated (Pushing every 3-4s without anchor)!", Duration = 3 })
+end
 
 local goalToggle = FarmTab:Toggle({
     Title = "Auto Goal",
@@ -956,42 +1012,7 @@ local goalToggle = FarmTab:Toggle({
             getgenv().BoostHubConfig.AutoGoal = false
             return
         end
-
-        getgenv().AutoGoal = state
-        getgenv().BoostHubConfig.AutoGoal = state
-
-        if not state then
-            return
-        end
-
-        if not getgenv().AntiBanEnabled then
-            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-        end
-        
-        task.spawn(function()
-            while getgenv().AutoGoal do
-                local currentChar = game.Players.LocalPlayer.Character
-                local soccerBall = workspace:FindFirstChild("SoccerBall", true)
-                
-                if soccerBall and currentChar and currentChar:FindFirstChild("HumanoidRootPart") then
-                    local hrp = currentChar.HumanoidRootPart
-                    local ballPart = soccerBall:IsA("BasePart") and soccerBall or soccerBall:FindFirstChildWhichIsA("BasePart", true)
-                    
-                    if ballPart then
-                        hrp.CFrame = ballPart.CFrame + Vector3.new(0, 2, -3)
-                        
-                        if ballPart:IsA("BasePart") then
-                            ballPart.AssemblyLinearVelocity = Vector3.new(0, 5, 35)
-                        end
-                    end
-                end
-                
-                local waitTime = math.random(30, 40) / 10
-                task.wait(waitTime)
-            end
-        end)
-        
-        WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal activated (Pushing every 3-4s without anchor)!", Duration = 3 })
+        applyAutoGoal(state)
     end,
 })
 
@@ -1000,45 +1021,49 @@ local goalToggle = FarmTab:Toggle({
 -- =============================================================
 EventsTab:Section({ Title = "Special Events" })
 
+applyAutoCollectOrbs = function(state)
+    getgenv().AutoCollectOrbs = state
+    getgenv().BoostHubConfig.AutoCollectOrbs = state
+    
+    if state then
+        if not getgenv().AntiBanEnabled then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
+        
+        WindUI:Notify({ Title = "Auto Collect Orbs", Content = "Started collecting DiscoOrbs!", Duration = 3 })
+        
+        task.spawn(function()
+            while getgenv().AutoCollectOrbs do
+                local char = game.Players.LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                
+                local orb = workspace:FindFirstChild("DiscoOrb", true)
+                
+                if orb and hrp then
+                    if orb:IsA("Model") then
+                        hrp.CFrame = orb:GetPivot() + Vector3.new(0, 3, 0)
+                    elseif orb:IsA("BasePart") then
+                        hrp.CFrame = orb.CFrame + Vector3.new(0, 3, 0)
+                    end
+                else
+                    WindUI:Notify({ Title = "Auto Collect Orbs", Content = "No more orbs found! Auto Collect stopped.", Duration = 4 })
+                    getgenv().AutoCollectOrbs = false
+                    getgenv().BoostHubConfig.AutoCollectOrbs = false
+                    break
+                end
+                
+                task.wait(0.3)
+            end
+        end)
+    end
+end
+
 local orbsToggle = EventsTab:Toggle({
     Title = "Auto Collect Orbs [NEW]",
     Desc = "Automatically teleports to DiscoOrb parts and stops when no orbs are left",
     Value = getgenv().BoostHubConfig.AutoCollectOrbs,
     Callback = function(state)
-        getgenv().AutoCollectOrbs = state
-        getgenv().BoostHubConfig.AutoCollectOrbs = state
-        
-        if state then
-            if not getgenv().AntiBanEnabled then
-                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-            end
-            
-            WindUI:Notify({ Title = "Auto Collect Orbs", Content = "Started collecting DiscoOrbs!", Duration = 3 })
-            
-            task.spawn(function()
-                while getgenv().AutoCollectOrbs do
-                    local char = game.Players.LocalPlayer.Character
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    
-                    local orb = workspace:FindFirstChild("DiscoOrb", true)
-                    
-                    if orb and hrp then
-                        if orb:IsA("Model") then
-                            hrp.CFrame = orb:GetPivot() + Vector3.new(0, 3, 0)
-                        elseif orb:IsA("BasePart") then
-                            hrp.CFrame = orb.CFrame + Vector3.new(0, 3, 0)
-                        end
-                    else
-                        WindUI:Notify({ Title = "Auto Collect Orbs", Content = "No more orbs found! Auto Collect stopped.", Duration = 4 })
-                        getgenv().AutoCollectOrbs = false
-                        getgenv().BoostHubConfig.AutoCollectOrbs = false
-                        break
-                    end
-                    
-                    task.wait(0.3)
-                end
-            end)
-        end
+        applyAutoCollectOrbs(state)
     end,
 })
 
@@ -1221,13 +1246,17 @@ ClientTab:Button({
 -- =============================================================
 AutomationTab:Section({ Title = "Anti-Ban Protection" })
 
+local function applyAntiBan(state)
+    getgenv().AntiBanEnabled = state
+    getgenv().BoostHubConfig.AntiBanEnabled = state
+end
+
 local antiBanToggle = AutomationTab:Toggle({
     Title = "Anti-Ban Safe Mode",
     Desc = "Randomizes action timings (jitter) to prevent anti-cheat detection",
     Value = getgenv().BoostHubConfig.AntiBanEnabled,
     Callback = function(state)
-        getgenv().AntiBanEnabled = state
-        getgenv().BoostHubConfig.AntiBanEnabled = state
+        applyAntiBan(state)
         WindUI:Notify({ Title = "Anti-Ban", Content = state and "Anti-Ban Safe Mode Enabled!" or "Anti-Ban Safe Mode Disabled!", Duration = 3 })
     end,
 })
@@ -1255,31 +1284,35 @@ AutomationTab:Button({
     end,
 })
 
+applyAutoClaimStand = function(state)
+    getgenv().BoostHubConfig.AutoClaimStand = state
+
+    if state then
+        if not getgenv().AntiBanEnabled then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
+
+        WindUI:Notify({ Title = "Auto Claim Stand", Content = "Auto Claim Stand enabled! Checking stand status...", Duration = 3 })
+
+        task.spawn(function()
+            while getgenv().BoostHubConfig.AutoClaimStand do
+                if not HasClaimedStand() then
+                    AttemptClaimStand()
+                end
+                task.wait(5)
+            end
+        end)
+    else
+        WindUI:Notify({ Title = "Auto Claim Stand", Content = "Auto Claim Stand disabled.", Duration = 3 })
+    end
+end
+
 local autoClaimStandToggle = AutomationTab:Toggle({
     Title = "Auto Claim Stand",
     Desc = "Automatically checks if you own a stand (by Display Name) and claims one if you don't",
     Value = getgenv().BoostHubConfig.AutoClaimStand,
     Callback = function(state)
-        getgenv().BoostHubConfig.AutoClaimStand = state
-
-        if state then
-            if not getgenv().AntiBanEnabled then
-                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-            end
-
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Auto Claim Stand enabled! Checking stand status...", Duration = 3 })
-
-            task.spawn(function()
-                while getgenv().BoostHubConfig.AutoClaimStand do
-                    if not HasClaimedStand() then
-                        AttemptClaimStand()
-                    end
-                    task.wait(5)
-                end
-            end)
-        else
-            WindUI:Notify({ Title = "Auto Claim Stand", Content = "Auto Claim Stand disabled.", Duration = 3 })
-        end
+        applyAutoClaimStand(state)
     end,
 })
 
@@ -1305,79 +1338,101 @@ AutomationTab:Input({
     end,
 })
 
-local autoBegToggle = AutomationTab:Toggle({
-    Title = "Auto Beg",
-    Desc = "Follows moving players, faces them, waits 25s, and tracks location changes",
-    Value = getgenv().BoostHubConfig.AutoBeg,
-    Callback = function(state)
-        getgenv().BoostHubConfig.AutoBeg = state
-        getgenv().BoostHubConfig.AutoBeg = state
+applyAutoBeg = function(state)
+    getgenv().AutoBeg = state
+    getgenv().BoostHubConfig.AutoBeg = state
 
-        if state then
-            if not getgenv().AntiBanEnabled then
-                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-            end
+    if state then
+        if not getgenv().AntiBanEnabled then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
 
-            WindUI:Notify({ Title = "Auto Beg", Content = "Auto Beg pathfinding started (Speed 23, 25s wait, facing player)!", Duration = 3 })
+        WindUI:Notify({ Title = "Auto Beg", Content = "Auto Beg pathfinding started (Speed 23, 25s wait, facing player)!", Duration = 3 })
 
-            task.spawn(function()
-                local PathfindingService = game:GetService("PathfindingService")
-                local beggedPlayers = {} 
-                local playerTrackers = {} 
+        task.spawn(function()
+            local PathfindingService = game:GetService("PathfindingService")
+            local beggedPlayers = {} 
+            local playerTrackers = {} 
 
-                task.wait(2.5)
+            task.wait(2.5)
 
-                while getgenv().BoostHubConfig.AutoBeg do
-                    local player = game.Players.LocalPlayer
-                    local char = player.Character
-                    if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then
-                        task.wait(1)
-                        continue
+            while getgenv().BoostHubConfig.AutoBeg do
+                local player = game.Players.LocalPlayer
+                local char = player.Character
+                if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then
+                    task.wait(1)
+                    continue
+                end
+
+                local hrp = char.HumanoidRootPart
+                local humanoid = char.Humanoid
+
+                humanoid.WalkSpeed = 23
+
+                local equippedTool = char:FindFirstChild("DonationSign")
+                if not equippedTool then
+                    task.wait(1)
+                    local backpackTool = player.Backpack and player.Backpack:FindFirstChild("DonationSign")
+                    if backpackTool then
+                        humanoid:EquipTool(backpackTool)
+                        task.wait(0.8)
+                        equippedTool = char:FindFirstChild("DonationSign")
                     end
+                end
 
-                    local hrp = char.HumanoidRootPart
-                    local humanoid = char.Humanoid
+                if not equippedTool then
+                    WindUI:Notify({ Title = "Auto Beg", Content = "Buy a Sign in a shop for this to work!", Duration = 6 })
+                    getgenv().AutoBeg = false
+                    getgenv().BoostHubConfig.AutoBeg = false
+                    humanoid.WalkSpeed = 16
+                    break
+                end
 
-                    humanoid.WalkSpeed = 23
-
-                    local equippedTool = char:FindFirstChild("DonationSign")
-                    if not equippedTool then
-                        task.wait(1)
-                        local backpackTool = player.Backpack and player.Backpack:FindFirstChild("DonationSign")
-                        if backpackTool then
-                            humanoid:EquipTool(backpackTool)
-                            task.wait(0.8)
-                            equippedTool = char:FindFirstChild("DonationSign")
-                        end
-                    end
-
-                    if not equippedTool then
-                        WindUI:Notify({ Title = "Auto Beg", Content = "Buy a Sign in a shop for this to work!", Duration = 6 })
-                        getgenv().BoostHubConfig.AutoBeg = false
-                        getgenv().BoostHubConfig.AutoBeg = false
-                        humanoid.WalkSpeed = 16
-                        break
-                    end
-
-                    local currentTime = tick()
-                    for _, p in ipairs(game.Players:GetPlayers()) do
-                        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                            local pPos = p.Character.HumanoidRootPart.Position
-                            if not playerTrackers[p.UserId] then
-                                playerTrackers[p.UserId] = { pos = pPos, time = currentTime }
-                            else
-                                local data = playerTrackers[p.UserId]
-                                if (pPos - data.pos).Magnitude > 3 then 
-                                    data.pos = pPos
-                                    data.time = currentTime
-                                end
+                local currentTime = tick()
+                for _, p in ipairs(game.Players:GetPlayers()) do
+                    if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        local pPos = p.Character.HumanoidRootPart.Position
+                        if not playerTrackers[p.UserId] then
+                            playerTrackers[p.UserId] = { pos = pPos, time = currentTime }
+                        else
+                            local data = playerTrackers[p.UserId]
+                            if (pPos - data.pos).Magnitude > 3 then 
+                                data.pos = pPos
+                                data.time = currentTime
                             end
                         end
                     end
+                end
 
-                    local targetPlayer = nil
+                local targetPlayer = nil
+                for _, p in ipairs(game.Players:GetPlayers()) do
+                    if p ~= player and not beggedPlayers[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        local tracker = playerTrackers[p.UserId]
+                        local isAfk = false
+                        if tracker and (currentTime - tracker.time) >= 180 then
+                            isAfk = true
+                        end
+
+                        if not isAfk then
+                            local hasPaidItem = false
+                            for _, desc in ipairs(p.Character:GetDescendants()) do
+                                if desc:IsA("Accessory") or desc:IsA("Clothing") or desc:IsA("ShirtGraphic") or desc:IsA("BodyColors") then
+                                    hasPaidItem = true
+                                    break
+                                end
+                            end
+                            if hasPaidItem then
+                                targetPlayer = p
+                                break
+                            end
+                        end
+                    end
+                end
+
+                if not targetPlayer then
+                    beggedPlayers = {}
                     for _, p in ipairs(game.Players:GetPlayers()) do
-                        if p ~= player and not beggedPlayers[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                             local tracker = playerTrackers[p.UserId]
                             local isAfk = false
                             if tracker and (currentTime - tracker.time) >= 180 then
@@ -1399,220 +1454,307 @@ local autoBegToggle = AutomationTab:Toggle({
                             end
                         end
                     end
+                end
 
-                    if not targetPlayer then
-                        beggedPlayers = {}
-                        for _, p in ipairs(game.Players:GetPlayers()) do
-                            if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                                local tracker = playerTrackers[p.UserId]
-                                local isAfk = false
-                                if tracker and (currentTime - tracker.time) >= 180 then
-                                    isAfk = true
+                if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    beggedPlayers[targetPlayer.UserId] = true 
+                    
+                    local stuckTime = 0
+                    local lastPos = hrp.Position
+
+                    while getgenv().BoostHubConfig.AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                        local targetHrp = targetPlayer.Character.HumanoidRootPart
+                        local randomStuds = math.random(5, 7)
+                        local destination = targetHrp.Position + (targetHrp.CFrame.LookVector * randomStuds)
+
+                        if (hrp.Position - targetHrp.Position).Magnitude <= 8 then
+                            break
+                        end
+
+                        local path = PathfindingService:CreatePath({
+                            AgentRadius = 2,
+                            AgentHeight = 5,
+                            AgentCanJump = true
+                        })
+
+                        local success = pcall(function()
+                            path:ComputeAsync(hrp.Position, destination)
+                        end)
+
+                        if success and path.Status == Enum.PathStatus.Success then
+                            local waypoints = path:GetWaypoints()
+                            local waypointIndex = 1
+
+                            while waypointIndex <= #waypoints and getgenv().BoostHubConfig.AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                                local currentTargetPos = targetPlayer.Character.HumanoidRootPart.Position
+                                local currentDest = currentTargetPos + (targetPlayer.Character.HumanoidRootPart.CFrame.LookVector * randomStuds)
+                                if (destination - currentDest).Magnitude > 8 then
+                                    break 
                                 end
 
-                                if not isAfk then
-                                    local hasPaidItem = false
-                                    for _, desc in ipairs(p.Character:GetDescendants()) do
-                                        if desc:IsA("Accessory") or desc:IsA("Clothing") or desc:IsA("ShirtGraphic") or desc:IsA("BodyColors") then
-                                            hasPaidItem = true
+                                local waypoint = waypoints[waypointIndex]
+                                humanoid:MoveTo(waypoint.Position)
+                                if waypoint.Action == Enum.PathWaypointAction.Jump then
+                                    humanoid.Jump = true
+                                end
+
+                                local reached = false
+                                local conn
+                                conn = humanoid.MoveToFinished:Connect(function()
+                                    reached = true
+                                    if conn then conn:Disconnect() end
+                                end)
+
+                                local startWait = tick()
+                                while not reached and tick() - startWait < 1.2 and getgenv().BoostHubConfig.AutoBeg do
+                                    task.wait(0.1)
+                                    if (hrp.Position - lastPos).Magnitude < 1 then
+                                        stuckTime = stuckTime + 0.1
+                                        if stuckTime >= 18 then
+                                            if conn then conn:Disconnect() end
                                             break
                                         end
-                                    end
-                                    if hasPaidItem then
-                                        targetPlayer = p
-                                        break
+                                    else
+                                        lastPos = hrp.Position
+                                        stuckTime = 0
                                     end
                                 end
-                            end
-                        end
-                    end
+                                if conn then conn:Disconnect() end
 
-                    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        beggedPlayers[targetPlayer.UserId] = true 
-                        
-                        local successRoute = false
-                        local stuckTime = 0
-                        local lastPos = hrp.Position
-
-                        while getgenv().BoostHubConfig.AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
-                            local targetHrp = targetPlayer.Character.HumanoidRootPart
-                            local randomStuds = math.random(5, 7)
-                            local destination = targetHrp.Position + (targetHrp.CFrame.LookVector * randomStuds)
-
-                            if (hrp.Position - targetHrp.Position).Magnitude <= 8 then
-                                successRoute = true
-                                break
+                                if stuckTime >= 18 then break end
+                                waypointIndex = waypointIndex + 1
                             end
 
-                            local path = PathfindingService:CreatePath({
-                                AgentRadius = 2,
-                                AgentHeight = 5,
-                                AgentCanJump = true
-                            })
-
-                            local success = pcall(function()
-                                path:ComputeAsync(hrp.Position, destination)
-                            end)
-
-                            if success and path.Status == Enum.PathStatus.Success then
-                                local waypoints = path:GetWaypoints()
-                                local waypointIndex = 1
-
-                                while waypointIndex <= #waypoints and getgenv().BoostHubConfig.AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
-                                    local currentTargetPos = targetPlayer.Character.HumanoidRootPart.Position
-                                    local currentDest = currentTargetPos + (targetPlayer.Character.HumanoidRootPart.CFrame.LookVector * randomStuds)
-                                    if (destination - currentDest).Magnitude > 8 then
-                                        break 
-                                    end
-
-                                    local waypoint = waypoints[waypointIndex]
-                                    humanoid:MoveTo(waypoint.Position)
-                                    if waypoint.Action == Enum.PathWaypointAction.Jump then
-                                        humanoid.Jump = true
-                                    end
-
-                                    local reached = false
-                                    local conn
-                                    conn = humanoid.MoveToFinished:Connect(function()
-                                        reached = true
-                                        if conn then conn:Disconnect() end
-                                    end)
-
-                                    local startWait = tick()
-                                    while not reached and tick() - startWait < 1.2 and getgenv().BoostHubConfig.AutoBeg do
-                                        task.wait(0.1)
-                                        if (hrp.Position - lastPos).Magnitude < 1 then
-                                            stuckTime = stuckTime + 0.1
-                                            if stuckTime >= 18 then
-                                                if conn then conn:Disconnect() end
-                                                break
-                                            end
-                                        else
-                                            lastPos = hrp.Position
-                                            stuckTime = 0
-                                        end
-                                    end
-                                    if conn then conn:Disconnect() end
-
-                                    if stuckTime >= 18 then break end
-                                    waypointIndex = waypointIndex + 1
-                                end
-
-                                if stuckTime >= 18 then
-                                    if char and char:FindFirstChildOfClass("Humanoid") then
-                                        char.Humanoid.Health = 0
-                                        task.wait(2.5)
-                                        break
-                                    end
-                                end
-
-                                if (hrp.Position - targetHrp.Position).Magnitude <= 8 then
-                                    successRoute = true
+                            if stuckTime >= 18 then
+                                if char and char:FindFirstChildOfClass("Humanoid") then
+                                    char.Humanoid.Health = 0
+                                    task.wait(2.5)
                                     break
                                 end
-                            else
-                                humanoid:MoveTo(destination)
-                                task.wait(1)
                             end
-                            task.wait(0.2)
-                        end
 
-                        if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then
-                            continue
-                        end
-
-                        if getgenv().BoostHubConfig.AutoBeg and autoBegSayEnabled and targetPlayer and targetPlayer.Name then
-                            local greetingMsg = string.format(autoBegMessageTemplate, targetPlayer.Name)
-                            SendChatMessage(greetingMsg)
-                        end
-
-                        local elapsed = 0
-                        while elapsed < 25 and getgenv().BoostHubConfig.AutoBeg do
-                            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                                local targetHrp = targetPlayer.Character.HumanoidRootPart
-                                
-                                local lookAtPos = Vector3.new(targetHrp.Position.X, hrp.Position.Y, targetHrp.Position.Z)
-                                hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
-
-                                if (hrp.Position - targetHrp.Position).Magnitude > 10 then
-                                    humanoid:MoveTo(targetHrp.Position)
-                                end
-                            else
-                                break 
+                            if (hrp.Position - targetHrp.Position).Magnitude <= 8 then
+                                break
                             end
-                            task.wait(0.5)
-                            elapsed = elapsed + 0.5
+                        else
+                            humanoid:MoveTo(destination)
+                            task.wait(1)
                         end
-                    else
-                        local spawnLoc = workspace:FindFirstChild("SpawnLocation", true)
-                        if spawnLoc then
-                            local spawnPos = spawnLoc:IsA("Model") and spawnLoc:GetPivot().Position or spawnLoc.Position
-                            humanoid:MoveTo(spawnPos)
-                        end
-                        task.wait(3)
+                        task.wait(0.2)
                     end
 
-                    if getgenv().BoostHubConfig.AutoBeg and char and char:FindFirstChildOfClass("Humanoid") then
-                        char.Humanoid.Health = 0 
-                        task.wait(2.5) 
+                    if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then
+                        continue
                     end
+
+                    if getgenv().BoostHubConfig.AutoBeg and autoBegSayEnabled and targetPlayer and targetPlayer.Name then
+                        local greetingMsg = string.format(autoBegMessageTemplate, targetPlayer.Name)
+                        SendChatMessage(greetingMsg)
+                    end
+
+                    local elapsed = 0
+                    while elapsed < 25 and getgenv().BoostHubConfig.AutoBeg do
+                        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                            local targetHrp = targetPlayer.Character.HumanoidRootPart
+                            local lookAtPos = Vector3.new(targetHrp.Position.X, hrp.Position.Y, targetHrp.Position.Z)
+                            hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
+
+                            if (hrp.Position - targetHrp.Position).Magnitude > 10 then
+                                humanoid:MoveTo(targetHrp.Position)
+                            end
+                        else
+                            break 
+                        end
+                        task.wait(0.5)
+                        elapsed = elapsed + 0.5
+                    end
+                else
+                    local spawnLoc = workspace:FindFirstChild("SpawnLocation", true)
+                    if spawnLoc then
+                        local spawnPos = spawnLoc:IsA("Model") and spawnLoc:GetPivot().Position or spawnLoc.Position
+                        humanoid:MoveTo(spawnPos)
+                    end
+                    task.wait(3)
                 end
 
-                local currentLocalChar = game.Players.LocalPlayer.Character
-                if currentLocalChar and currentLocalChar:FindFirstChildOfClass("Humanoid") then
-                    currentLocalChar.Humanoid.WalkSpeed = 16
+                if getgenv().BoostHubConfig.AutoBeg and char and char:FindFirstChildOfClass("Humanoid") then
+                    char.Humanoid.Health = 0 
+                    task.wait(2.5) 
                 end
-            end)
-        else
+            end
+
             local currentLocalChar = game.Players.LocalPlayer.Character
             if currentLocalChar and currentLocalChar:FindFirstChildOfClass("Humanoid") then
                 currentLocalChar.Humanoid.WalkSpeed = 16
             end
+        end)
+    else
+        local currentLocalChar = game.Players.LocalPlayer.Character
+        if currentLocalChar and currentLocalChar:FindFirstChildOfClass("Humanoid") then
+            currentLocalChar.Humanoid.WalkSpeed = 16
         end
+    end
+end
+
+local autoBegToggle = AutomationTab:Toggle({
+    Title = "Auto Beg",
+    Desc = "Follows moving players, faces them, waits 25s, and tracks location changes",
+    Value = getgenv().BoostHubConfig.AutoBeg,
+    Callback = function(state)
+        applyAutoBeg(state)
     end,
 })
 
 AutomationTab:Section({ Title = "Advanced Automation & Chat" })
+
+local autoEquipSign = false
+local charAddedConn
+AutomationTab:Toggle({
+    Title = "Auto Equip Sign on Spawn",
+    Desc = "Automatically equips your sign tool when you respawn",
+    Value = false,
+    Callback = function(state)
+        autoEquipSign = state
+        if state and not getgenv().AntiBanEnabled then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
+        end
+        local player = game.Players.LocalPlayer
+        if state then
+            charAddedConn = player.CharacterAdded:Connect(function(char)
+                if not autoEquipSign then return end
+                task.wait(1.5)
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    local signTool = player.Backpack:FindFirstChild("DonationSign") or char:FindFirstChild("DonationSign")
+                    if signTool then
+                        humanoid:EquipTool(signTool)
+                    end
+                end
+            end)
+            WindUI:Notify({ Title = "Auto Equip", Content = "Auto Equip Sign enabled!", Duration = 3 })
+        else
+            if charAddedConn then charAddedConn:Disconnect() end
+        end
+    end,
+})
+
+local autoRejoin = false
+local rejoinConn
+AutomationTab:Toggle({
+    Title = "Auto Rejoin on Kick",
+    Desc = "Automatically rejoins the game if disconnected or kicked",
+    Value = false,
+    Callback = function(state)
+        autoRejoin = state
+        if state then
+            rejoinConn = game:GetService("CoreGui").ChildAdded:Connect(function(child)
+                if autoRejoin and (child.Name == "RobloxPromptGui" or child.Name == "ErrorPrompt") then
+                    task.wait(2)
+                    game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer)
+                end
+            end)
+            WindUI:Notify({ Title = "Auto Rejoin", Content = "Auto Rejoin enabled!", Duration = 3 })
+        else
+            if rejoinConn then rejoinConn:Disconnect() end
+        end
+    end,
+})
+
+AutomationTab:Section({ Title = "Custom Auto Spam Messages" })
+
+AutomationTab:Input({
+    Title = "Spam Message 1",
+    Desc = "Edit spam message #1",
+    Placeholder = "Enter message...",
+    Value = autoChatMessages[1],
+    Callback = function(text)
+        if text ~= "" then autoChatMessages[1] = text end
+    end,
+})
+
+AutomationTab:Input({
+    Title = "Spam Message 2",
+    Desc = "Edit spam message #2",
+    Placeholder = "Enter message...",
+    Value = autoChatMessages[2],
+    Callback = function(text)
+        if text ~= "" then autoChatMessages[2] = text end
+    end,
+})
+
+AutomationTab:Input({
+    Title = "Spam Message 3",
+    Desc = "Edit spam message #3",
+    Placeholder = "Enter message...",
+    Value = autoChatMessages[3],
+    Callback = function(text)
+        if text ~= "" then autoChatMessages[3] = text end
+    end,
+})
+
+AutomationTab:Input({
+    Title = "Spam Message 4",
+    Desc = "Edit spam message #4",
+    Placeholder = "Enter message...",
+    Value = autoChatMessages[4],
+    Callback = function(text)
+        if text ~= "" then autoChatMessages[4] = text end
+    end,
+})
+
+AutomationTab:Input({
+    Title = "Spam Message 5",
+    Desc = "Edit spam message #5",
+    Placeholder = "Enter message...",
+    Value = autoChatMessages[5],
+    Callback = function(text)
+        if text ~= "" then autoChatMessages[5] = text end
+    end,
+})
+
+applyAutoChatSpam = function(state)
+    getgenv().AutoChatSpam = state
+    getgenv().BoostHubConfig.AutoChatSpam = state
+    if state then
+        if not getgenv().AntiBanEnabled then
+            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
+        end
+        task.spawn(function()
+            while getgenv().BoostHubConfig.AutoChatSpam do
+                local activeMessages = {}
+                for _, msg in ipairs(autoChatMessages) do
+                    if msg and msg ~= "" then
+                        table.insert(activeMessages, msg)
+                    end
+                end
+                
+                if #activeMessages > 0 then
+                    local randomIndex = math.random(1, #activeMessages)
+                    SendChatMessage(activeMessages[randomIndex])
+                end
+                
+                local waitTime = 25
+                if getgenv().AntiBanEnabled then
+                    waitTime = waitTime + math.random(-4, 5)
+                end
+                
+                local elapsed = 0
+                while elapsed < waitTime and getgenv().BoostHubConfig.AutoChatSpam do
+                    task.wait(0.5)
+                    elapsed = elapsed + 0.5
+                end
+            end
+        end)
+        WindUI:Notify({ Title = "Auto Chat", Content = "Auto Chat Spammer enabled (25s delay)!", Duration = 3 })
+    end
+end
 
 local autoChatSpamToggle = AutomationTab:Toggle({
     Title = "Auto Chat Spammer",
     Desc = "Sends a random custom message from your 5 fields every 25 seconds",
     Value = getgenv().BoostHubConfig.AutoChatSpam,
     Callback = function(state)
-        getgenv().AutoChatSpam = state
-        getgenv().BoostHubConfig.AutoChatSpam = state
-        if state then
-            if not getgenv().AntiBanEnabled then
-                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
-            end
-            task.spawn(function()
-                while getgenv().BoostHubConfig.AutoChatSpam do
-                    local activeMessages = {}
-                    for _, msg in ipairs(autoChatMessages) do
-                        if msg and msg ~= "" then
-                            table.insert(activeMessages, msg)
-                        end
-                    end
-                    
-                    if #activeMessages > 0 then
-                        local randomIndex = math.random(1, #activeMessages)
-                        SendChatMessage(activeMessages[randomIndex])
-                    end
-                    
-                    local waitTime = 25
-                    if getgenv().AntiBanEnabled then
-                        waitTime = waitTime + math.random(-4, 5)
-                    end
-                    
-                    local elapsed = 0
-                    while elapsed < waitTime and getgenv().BoostHubConfig.AutoChatSpam do
-                        task.wait(0.5)
-                        elapsed = elapsed + 0.5
-                    end
-                end
-            end)
-            WindUI:Notify({ Title = "Auto Chat", Content = "Auto Chat Spammer enabled (25s delay)!", Duration = 3 })
-        end
+        applyAutoChatSpam(state)
     end,
 })
 
@@ -1626,7 +1768,7 @@ updateTogglesAndSettings = function()
         if rngToggle and rngToggle.SetValue then rngToggle:SetValue(getgenv().BoostHubConfig.AutoRNG) end
         if goalToggle and goalToggle.SetValue then goalToggle:SetValue(getgenv().BoostHubConfig.AutoGoal) end
         if orbsToggle and orbsToggle.SetValue then orbsToggle:SetValue(getgenv().BoostHubConfig.AutoCollectOrbs) end
-        if antiBanToggle and antiBanToggle.SetValue then antiBanToggle:SetValue(getgenv().BoostHubConfig.AntiBanEnabled) end
+        if antiBanToggle and antiBanToggle.SetValue then antiBanToggle:SetValue(getgenv().AntiBanEnabled) end
         if autoClaimStandToggle and autoClaimStandToggle.SetValue then autoClaimStandToggle:SetValue(getgenv().BoostHubConfig.AutoClaimStand) end
         if autoBegToggle and autoBegToggle.SetValue then autoBegToggle:SetValue(getgenv().BoostHubConfig.AutoBeg) end
         if autoChatSpamToggle and autoChatSpamToggle.SetValue then autoChatSpamToggle:SetValue(getgenv().BoostHubConfig.AutoChatSpam) end
