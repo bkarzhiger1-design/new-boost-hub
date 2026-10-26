@@ -64,6 +64,10 @@ local autoChatMessages = {
     "Currently afk. Any given amount will be appreciated!"
 }
 
+-- Auto Beg Custom Greeting & Toggle State
+local autoBegSayEnabled = true
+local autoBegMessageTemplate = "Hello %s, would you like to donate me? Any donation is highly appreciated :D"
+
 -- 2. CREATE MAIN WINDOW (WITH DUAL-KEY SUPPORT)
 local Window = WindUI:CreateWindow({
     Title = "Boost Hub",
@@ -175,7 +179,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Auto Beg now checks specifically for 'DonationSign' tool\n[-] WalkSpeed automatically adjusts to 23 during Auto Beg",
+            Content = "[-] Made Auto Beg greeting optional with customizable format\n[-] Added dynamic target tracking (follows moving/teleporting players) and instant switch if target leaves",
             Duration = 8
         })
     end,
@@ -1032,10 +1036,33 @@ AutomationTab:Button({
     end,
 })
 
--- AUTO BEG TOGGLE (PATHFINDING + 'DonationSign' ONLY + SPEED 23 + TARGET GREETING)
+-- AUTO BEG CONFIG CONTROLS (OPTIONAL AUTO SAY & MESSAGE TEMPLATE)
+AutomationTab:Toggle({
+    Title = "Auto Beg Say Toggle",
+    Desc = "Enables or disables greeting targeted players in chat automatically",
+    Value = autoBegSayEnabled,
+    Callback = function(state)
+        autoBegSayEnabled = state
+        WindUI:Notify({ Title = "Auto Beg Say", Content = state and "Target greeting enabled!" or "Target greeting disabled.", Duration = 3 })
+    end,
+})
+
+AutomationTab:Input({
+    Title = "Auto Beg Greeting Message",
+    Desc = "Use %s where the player's username should appear",
+    Placeholder = "Hello %s, donate please!",
+    Value = autoBegMessageTemplate,
+    Callback = function(text)
+        if text ~= "" then
+            autoBegMessageTemplate = text
+        end
+    end,
+})
+
+-- AUTO BEG TOGGLE (PATHFINDING + DYNAMIC TARGET TRACKING + INSTANT RE-TARGET ON LEAVE)
 AutomationTab:Toggle({
     Title = "Auto Beg",
-    Desc = "Pathfinds to active players using DonationSign, greets them, and resets if stuck",
+    Desc = "Follows moving players, switches if they leave, uses DonationSign, and resets if stuck",
     Value = getgenv().BoostHubConfig.AutoBeg,
     Callback = function(state)
         getgenv().AutoBeg = state
@@ -1161,71 +1188,105 @@ AutomationTab:Toggle({
 
                     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
                         beggedPlayers[targetPlayer.UserId] = true 
-                        local targetHrp = targetPlayer.Character.HumanoidRootPart
-                        local randomStuds = math.random(5, 7)
-                        local destination = targetHrp.Position + (targetHrp.CFrame.LookVector * randomStuds)
+                        
+                        -- Dynamic pathfinding loop with live target tracking and disconnect check
+                        local successRoute = false
+                        local stuckTime = 0
+                        local lastPos = hrp.Position
 
-                        local path = PathfindingService:CreatePath({
-                            AgentRadius = 2,
-                            AgentHeight = 5,
-                            AgentCanJump = true
-                        })
+                        while getgenv().AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                            local targetHrp = targetPlayer.Character.HumanoidRootPart
+                            local randomStuds = math.random(5, 7)
+                            local destination = targetHrp.Position + (targetHrp.CFrame.LookVector * randomStuds)
 
-                        local success = pcall(function()
-                            path:ComputeAsync(hrp.Position, destination)
-                        end)
+                            -- Check if player is already close enough (within destination range)
+                            if (hrp.Position - targetHrp.Position).Magnitude <= 8 then
+                                successRoute = true
+                                break
+                            end
 
-                        if success and path.Status == Enum.PathStatus.Success then
-                            local waypoints = path:GetWaypoints()
-                            local lastPos = hrp.Position
-                            local stuckTime = 0
+                            local path = PathfindingService:CreatePath({
+                                AgentRadius = 2,
+                                AgentHeight = 5,
+                                AgentCanJump = true
+                            })
 
-                            for _, waypoint in ipairs(waypoints) do
-                                if not getgenv().AutoBeg then break end
-                                humanoid:MoveTo(waypoint.Position)
-                                if waypoint.Action == Enum.PathWaypointAction.Jump then
-                                    humanoid.Jump = true
-                                end
-                                
-                                local reached = false
-                                local conn
-                                conn = humanoid.MoveToFinished:Connect(function()
-                                    reached = true
-                                    if conn then conn:Disconnect() end
-                                end)
+                            local success = pcall(function()
+                                path:ComputeAsync(hrp.Position, destination)
+                            end)
 
-                                local startWait = tick()
-                                while not reached and tick() - startWait < 1.5 and getgenv().AutoBeg do
-                                    task.wait(0.1)
-                                    if (hrp.Position - lastPos).Magnitude < 1 then
-                                        stuckTime = stuckTime + 0.1
-                                        if stuckTime >= 18 then 
-                                            if conn then conn:Disconnect() end
-                                            break
+                            if success and path.Status == Enum.PathStatus.Success then
+                                local waypoints = path:GetWaypoints()
+                                local waypointIndex = 1
+
+                                while waypointIndex <= #waypoints and getgenv().AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                                    -- Live re-target check: if target ran away or teleported > 8 studs from destination, recalculate path
+                                    local currentTargetPos = targetPlayer.Character.HumanoidRootPart.Position
+                                    local currentDest = currentTargetPos + (targetPlayer.Character.HumanoidRootPart.CFrame.LookVector * randomStuds)
+                                    if (destination - currentDest).Magnitude > 8 then
+                                        break -- Break waypoint walk to recalculate new path to moved player
+                                    end
+
+                                    local waypoint = waypoints[waypointIndex]
+                                    humanoid:MoveTo(waypoint.Position)
+                                    if waypoint.Action == Enum.PathWaypointAction.Jump then
+                                        humanoid.Jump = true
+                                    end
+
+                                    local reached = false
+                                    local conn
+                                    conn = humanoid.MoveToFinished:Connect(function()
+                                        reached = true
+                                        if conn then conn:Disconnect() end
+                                    end)
+
+                                    local startWait = tick()
+                                    while not reached and tick() - startWait < 1.2 and getgenv().AutoBeg do
+                                        task.wait(0.1)
+                                        if (hrp.Position - lastPos).Magnitude < 1 then
+                                            stuckTime = stuckTime + 0.1
+                                            if stuckTime >= 18 then
+                                                if conn then conn:Disconnect() end
+                                                break
+                                            end
+                                        else
+                                            lastPos = hrp.Position
+                                            stuckTime = 0
                                         end
-                                    else
-                                        lastPos = hrp.Position
-                                        stuckTime = 0
+                                    end
+                                    if conn then conn:Disconnect() end
+
+                                    if stuckTime >= 18 then break end
+                                    waypointIndex = waypointIndex + 1
+                                end
+
+                                if stuckTime >= 18 then
+                                    if char and char:FindFirstChildOfClass("Humanoid") then
+                                        char.Humanoid.Health = 0
+                                        task.wait(2.5)
+                                        break
                                     end
                                 end
-                                if conn then conn:Disconnect() end
 
-                                if stuckTime >= 18 then break end
-                            end
-
-                            if stuckTime >= 18 then
-                                if char and char:FindFirstChildOfClass("Humanoid") then
-                                    char.Humanoid.Health = 0
-                                    task.wait(2.5)
-                                    continue
+                                if (hrp.Position - targetHrp.Position).Magnitude <= 8 then
+                                    successRoute = true
+                                    break
                                 end
+                            else
+                                humanoid:MoveTo(destination)
+                                task.wait(1)
                             end
-                        else
-                            humanoid:MoveTo(destination)
+                            task.wait(0.2)
                         end
 
-                        if getgenv().AutoBeg and targetPlayer and targetPlayer.Name then
-                            local greetingMsg = string.format("Hello %s, would you like to donate me? Any donation is highly appreciated :D", targetPlayer.Name)
+                        -- If target left server while walking, loop back to find a new guy instantly
+                        if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then
+                            continue
+                        end
+
+                        -- Send optional targeted greeting message once arrived
+                        if getgenv().AutoBeg and autoBegSayEnabled and targetPlayer and targetPlayer.Name then
+                            local greetingMsg = string.format(autoBegMessageTemplate, targetPlayer.Name)
                             SendChatMessage(greetingMsg)
                         end
                     else
