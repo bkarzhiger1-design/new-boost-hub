@@ -2,13 +2,28 @@
 --                     BOOST HUB - WIND UI TEMPLATE
 -- =============================================================
 
--- 1. SAFE LOAD WIND UI LIBRARY
+-- Loading Library
 local success, WindUI = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+    -- Standard Method
+    if syn and syn.request then
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+    else
+        -- Another variant for Mobile Users
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+    end
 end)
 
 if not success or not WindUI then
-    warn("Failed to load WindUI! Check your executor or internet connection.")
+    -- If Your Executor or Your device doesn't support WindUi then you will see this message
+    local gui = Instance.new("ScreenGui", game.CoreGui)
+    local label = Instance.new("TextLabel", gui)
+    label.Size = UDim2.new(1, 0, 0, 50)
+    label.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextSize = 18
+    label.Text = "ERROR: Your executor cannot load WindUI! Try a different executor."
+    task.wait(10)
+    gui:Destroy()
     return
 end
 
@@ -76,10 +91,10 @@ local Window = WindUI:CreateWindow({
     Size = UDim2.fromOffset(600, 520),
     Theme = "Dark",
     Transparent = true,
-    HideSearchBar = false, -- Enables Search Bar above tabs
+    HideSearchBar = false,
     User = {
         Enabled = true,
-        Anonymous = false, -- Displays your real Username & Profile Icon
+        Anonymous = false,
         Callback = function()
             WindUI:Notify({ Title = "Profile", Content = "Logged in as " .. game.Players.LocalPlayer.DisplayName, Duration = 3 })
         end,
@@ -179,7 +194,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Character now faces the target player instead of walls\n[-] Increased wait time near player to 25s with active location tracking",
+            Content = "[-] Fixed mobile executor loading error\n[-] Character faces target player, waits 25s, and tracks movement",
             Duration = 8
         })
     end,
@@ -679,7 +694,7 @@ FarmTab:Toggle({
                 local waitTime = math.random(30, 40) / 10
                 task.wait(waitTime)
             end
-        end,
+        end)
         
         WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal activated (Pushing every 3-4s without anchor)!", Duration = 3 })
     end,
@@ -1924,7 +1939,7 @@ OtherTab:Button({
 SettingsTab:Section({ Title = "Developer Info" })
 
 SettingsTab:Button({
-    Title = '<font color="#00ff00">Was Made By Xeavz</font>',
+    Title = '<font color="#00ff00">Was Made By Xeavz</Font>',
     Desc = "Script Maker | UI Developer",
     Callback = function()
         WindUI:Notify({ Title = "Boost Hub", Content = "Thanks for using Boost Hub by Xeavz!", Duration = 3 })
