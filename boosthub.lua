@@ -41,6 +41,9 @@ getgenv().BoostHubConfig = getgenv().BoostHubConfig or {
     AutoClaimStand = false,
     AntiBanEnabled = true,
     AutoChatSpam = false,
+    Disable3DRender = false,
+    WalkSpeed = 16,
+    JumpPower = 50,
     CatClickDelay = 100,
     RNGDelay = 15,
     AutoExecuteEnabled = false
@@ -132,18 +135,19 @@ local function checkAndHopForAdmins(player)
     return false
 end
 
--- Scan already present players on startup
 for _, p in ipairs(Players:GetPlayers()) do
     checkAndHopForAdmins(p)
 end
 
--- Listen for new players joining
 Players.PlayerAdded:Connect(function(p)
     p.CharacterAdded:Connect(function()
         checkAndHopForAdmins(p)
     end)
     checkAndHopForAdmins(p)
 end)
+
+-- FORWARD DECLARATIONS FOR UI CALLBACKS
+local updateTogglesAndSettings
 
 -- CONFIGURATION SYSTEM FUNCTIONS
 local function getSavedConfigsList()
@@ -182,6 +186,9 @@ local function saveConfiguration(configName)
             AutoClaimStand = getgenv().BoostHubConfig.AutoClaimStand,
             AntiBanEnabled = getgenv().AntiBanEnabled,
             AutoChatSpam = getgenv().BoostHubConfig.AutoChatSpam,
+            Disable3DRender = getgenv().BoostHubConfig.Disable3DRender,
+            WalkSpeed = getgenv().BoostHubConfig.WalkSpeed,
+            JumpPower = getgenv().BoostHubConfig.JumpPower,
             CatClickDelay = getgenv().BoostHubConfig.CatClickDelay,
             RNGDelay = getgenv().BoostHubConfig.RNGDelay,
             AutoBegSay = autoBegSayEnabled,
@@ -214,6 +221,9 @@ local function loadConfiguration(configName)
             getgenv().BoostHubConfig.AntiBanEnabled = getgenv().AntiBanEnabled
             getgenv().AutoChatSpam = data.AutoChatSpam or false
             getgenv().BoostHubConfig.AutoChatSpam = getgenv().BoostHubConfig.AutoChatSpam
+            getgenv().BoostHubConfig.Disable3DRender = data.Disable3DRender or false
+            getgenv().BoostHubConfig.WalkSpeed = data.WalkSpeed or 16
+            getgenv().BoostHubConfig.JumpPower = data.JumpPower or 50
             getgenv().BoostHubConfig.CatClickDelay = data.CatClickDelay or 100
             getgenv().CatClickDelay = getgenv().BoostHubConfig.CatClickDelay / 1000
             getgenv().BoostHubConfig.RNGDelay = data.RNGDelay or 15
@@ -224,12 +234,15 @@ local function loadConfiguration(configName)
             end
             getgenv().BoostHubConfig.AutoExecuteEnabled = data.AutoExecuteEnabled or false
             
+            if updateTogglesAndSettings then
+                updateTogglesAndSettings()
+            end
+
             WindUI:Notify({ Title = "Configuration Loaded", Content = "Loaded configuration: " .. configName, Duration = 3 })
         end
     end
 end
 
--- Check and auto-load configuration on startup
 pcall(function()
     if readfile then
         local success, autoName = pcall(function()
@@ -278,7 +291,6 @@ local ConfigureTab = Window:Tab({ Title = "Configure", Icon = "palette" })
 local OtherTab = Window:Tab({ Title = "Other", Icon = "folder" })
 local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
 
--- Helper Function to Attempt Teleporting to a Player's Server
 local function TryTeleportToPlayer(username, roleName)
     local targetUserId
     local successId = pcall(function()
@@ -318,7 +330,6 @@ local function TryTeleportToPlayer(username, roleName)
     return false
 end
 
--- Helper Function for Chat Messages
 local function SendChatMessage(msg)
     local TextChatService = game:GetService("TextChatService")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -336,7 +347,7 @@ local function SendChatMessage(msg)
     end
 end
 
--- HELPER FUNCTION TO CHECK IF STAND ALREADY BELONGS TO PLAYER (USING DISPLAY NAME)
+-- HELPER FUNCTION TO STRICTLY CHECK REAL PLAYER STANDS (EXCLUDING SHOPS)
 local function HasClaimedStand()
     local localPlayer = Players.LocalPlayer
     local manualName = string.lower(localPlayer.DisplayName)
@@ -352,7 +363,9 @@ local function HasClaimedStand()
                     local parentName = string.lower(obj.Parent.Name)
                     local grandParentName = obj.Parent.Parent and string.lower(obj.Parent.Parent.Name) or ""
                     
-                    if string.find(parentName, "stand") or string.find(grandParentName, "stand") or string.find(text, "stand") then
+                    -- Ensure it's a stand and NOT a shop
+                    if (string.find(parentName, "stand") or string.find(grandParentName, "stand") or string.find(text, "stand")) and
+                       not string.find(parentName, "shop") and not string.find(grandParentName, "shop") then
                         return true
                     end
                 end
@@ -362,7 +375,6 @@ local function HasClaimedStand()
     return false
 end
 
--- HELPER FUNCTION TO EXECUTE STAND CLAIMING LOGIC (TELEPORTS TO BASEEMITTER & HOLDS PROXIMITY PROMPT)
 local function AttemptClaimStand()
     if HasClaimedStand() then
         return false
@@ -380,7 +392,9 @@ local function AttemptClaimStand()
         if obj:IsA("BasePart") then
             local nameLower = string.lower(obj.Name)
             if string.find(nameLower, "baseemitter") or string.find(nameLower, "stand") then
-                table.insert(emitters, obj)
+                if not string.find(nameLower, "shop") then
+                    table.insert(emitters, obj)
+                end
             end
         end
     end
@@ -388,7 +402,10 @@ local function AttemptClaimStand()
     if #emitters == 0 then
         for _, obj in pairs(workspace:GetDescendants()) do
             if obj:IsA("BasePart") and not obj:IsDescendantOf(char) then
-                table.insert(emitters, obj)
+                local nameLower = string.lower(obj.Name)
+                if not string.find(nameLower, "shop") then
+                    table.insert(emitters, obj)
+                end
             end
         end
     end
@@ -444,8 +461,12 @@ local function AttemptClaimStand()
                     task.wait(0.2)
                 end
 
-                claimed = true
-                break
+                -- RE-CHECK STAND OWNERSHIP TO PREVENT FALSE POSITIVES FROM SHOP STANDS
+                task.wait(1)
+                if HasClaimedStand() then
+                    claimed = true
+                    break
+                end
             end
         end
     end
@@ -465,7 +486,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Fixed SurfaceGui text error\n[-] Updated Auto Claim Stand to teleport to BaseEmitter parts and check for ProximityPrompts",
+            Content = "[-] Fixed configuration saving for all toggles and sliders\n[-] Fixed auto-load behavior so loaded features run instantly\n[-] Added strict stand validation to prevent shop stand false positives",
             Duration = 8
         })
     end,
@@ -473,10 +494,11 @@ MainTab:Button({
 
 MainTab:Section({ Title = "Player Stats" })
 
-MainTab:Slider({
+local walkSpeedSlider = MainTab:Slider({
     Title = "Walk Speed",
-    Value = { Min = 16, Max = 300, Default = 16 },
+    Value = { Min = 16, Max = 300, Default = getgenv().BoostHubConfig.WalkSpeed },
     Callback = function(speed)
+        getgenv().BoostHubConfig.WalkSpeed = speed
         local char = game.Players.LocalPlayer.Character
         if char and char:FindFirstChild("Humanoid") then
             char.Humanoid.WalkSpeed = speed
@@ -487,10 +509,11 @@ MainTab:Slider({
     end,
 })
 
-MainTab:Slider({
+local jumpPowerSlider = MainTab:Slider({
     Title = "Jump Power",
-    Value = { Min = 50, Max = 400, Default = 50 },
+    Value = { Min = 50, Max = 400, Default = getgenv().BoostHubConfig.JumpPower },
     Callback = function(power)
+        getgenv().BoostHubConfig.JumpPower = power
         local char = game.Players.LocalPlayer.Character
         if char and char:FindFirstChild("Humanoid") then
             char.Humanoid.UseJumpPower = true
@@ -504,11 +527,12 @@ MainTab:Slider({
 
 MainTab:Section({ Title = "Performance Settings" })
 
-MainTab:Toggle({
+local renderToggle = MainTab:Toggle({
     Title = "Disable 3D Render",
     Desc = "Pauses 3D rendering completely for max performance/FPS while AFK",
-    Value = false,
+    Value = getgenv().BoostHubConfig.Disable3DRender,
     Callback = function(state)
+        getgenv().BoostHubConfig.Disable3DRender = state
         local runService = game:GetService("RunService")
         if runService.Set3dRenderingEnabled then
             runService:Set3dRenderingEnabled(not state)
@@ -841,7 +865,7 @@ local function loop(alvo)
     end
 end
 
-FarmTab:Toggle({
+local catClickToggle = FarmTab:Toggle({
     Title = "Auto Cat Click",
     Desc = "Automatically searches and clicks targets using ClickDetector scanner",
     Value = getgenv().BoostHubConfig.AutoCatClick,
@@ -867,7 +891,7 @@ FarmTab:Toggle({
     end,
 })
 
-FarmTab:Toggle({
+local rngToggle = FarmTab:Toggle({
     Title = "Auto RNG",
     Desc = "Teleports to 'RNGButton' based on set delay",
     Value = getgenv().BoostHubConfig.AutoRNG,
@@ -917,7 +941,7 @@ FarmTab:Toggle({
     end,
 })
 
-FarmTab:Toggle({
+local goalToggle = FarmTab:Toggle({
     Title = "Auto Goal",
     Desc = "Teleports to SoccerBall and pushes it towards the goal every 3-4 seconds",
     Value = getgenv().BoostHubConfig.AutoGoal,
@@ -976,7 +1000,7 @@ FarmTab:Toggle({
 -- =============================================================
 EventsTab:Section({ Title = "Special Events" })
 
-EventsTab:Toggle({
+local orbsToggle = EventsTab:Toggle({
     Title = "Auto Collect Orbs [NEW]",
     Desc = "Automatically teleports to DiscoOrb parts and stops when no orbs are left",
     Value = getgenv().BoostHubConfig.AutoCollectOrbs,
@@ -1197,7 +1221,7 @@ ClientTab:Button({
 -- =============================================================
 AutomationTab:Section({ Title = "Anti-Ban Protection" })
 
-AutomationTab:Toggle({
+local antiBanToggle = AutomationTab:Toggle({
     Title = "Anti-Ban Safe Mode",
     Desc = "Randomizes action timings (jitter) to prevent anti-cheat detection",
     Value = getgenv().BoostHubConfig.AntiBanEnabled,
@@ -1209,34 +1233,6 @@ AutomationTab:Toggle({
 })
 
 AutomationTab:Section({ Title = "Stand & Begging Tasks" })
-
-local instantPromptConn = nil
-AutomationTab:Toggle({
-    Title = "Instant Proximity Prompts",
-    Desc = "Sets all ProximityPrompt HoldDuration to 0 for instant triggering",
-    Value = false,
-    Callback = function(state)
-        if state then
-            for _, obj in pairs(workspace:GetDescendants()) do
-                if obj:IsA("ProximityPrompt") then
-                    obj.HoldDuration = 0
-                end
-            end
-            instantPromptConn = workspace.DescendantAdded:Connect(function(child)
-                if child:IsA("ProximityPrompt") then
-                    child.HoldDuration = 0
-                end
-            end)
-            WindUI:Notify({ Title = "Instant Prompts", Content = "Proximity Prompts are now instant!", Duration = 3 })
-        else
-            if instantPromptConn then
-                instantPromptConn:Disconnect()
-                instantPromptConn = nil
-            end
-            WindUI:Notify({ Title = "Instant Prompts", Content = "Instant Prompts disabled.", Duration = 3 })
-        end
-    end,
-})
 
 AutomationTab:Button({
     Title = "Claim Stand",
@@ -1251,7 +1247,7 @@ AutomationTab:Button({
             WindUI:Notify({ Title = "Claim Stand", Content = "Successfully claimed stand and returned!", Duration = 3 })
         else
             if HasClaimedStand() then
-                WindUI:Notify({ Title = "Claim Stand", Content = "You already own a stand!", Duration = 4 })
+                WindUI:Notify({ Title = "Claim Stand", Content = "You already own a valid player stand!", Duration = 4 })
             else
                 WindUI:Notify({ Title = "Claim Stand", Content = "Could not locate a claimable stand!", Duration = 4 })
             end
@@ -1259,7 +1255,7 @@ AutomationTab:Button({
     end,
 })
 
-AutomationTab:Toggle({
+local autoClaimStandToggle = AutomationTab:Toggle({
     Title = "Auto Claim Stand",
     Desc = "Automatically checks if you own a stand (by Display Name) and claims one if you don't",
     Value = getgenv().BoostHubConfig.AutoClaimStand,
@@ -1287,7 +1283,6 @@ AutomationTab:Toggle({
     end,
 })
 
--- AUTO BEG CONFIG CONTROLS
 AutomationTab:Toggle({
     Title = "Auto Beg Say Toggle",
     Desc = "Enables or disables greeting targeted players in chat automatically",
@@ -1310,13 +1305,12 @@ AutomationTab:Input({
     end,
 })
 
--- AUTO BEG TOGGLE
-AutomationTab:Toggle({
+local autoBegToggle = AutomationTab:Toggle({
     Title = "Auto Beg",
     Desc = "Follows moving players, faces them, waits 25s, and tracks location changes",
     Value = getgenv().BoostHubConfig.AutoBeg,
     Callback = function(state)
-        getgenv().AutoBeg = state
+        getgenv().BoostHubConfig.AutoBeg = state
         getgenv().BoostHubConfig.AutoBeg = state
 
         if state then
@@ -1333,7 +1327,7 @@ AutomationTab:Toggle({
 
                 task.wait(2.5)
 
-                while getgenv().AutoBeg do
+                while getgenv().BoostHubConfig.AutoBeg do
                     local player = game.Players.LocalPlayer
                     local char = player.Character
                     if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then
@@ -1359,7 +1353,7 @@ AutomationTab:Toggle({
 
                     if not equippedTool then
                         WindUI:Notify({ Title = "Auto Beg", Content = "Buy a Sign in a shop for this to work!", Duration = 6 })
-                        getgenv().AutoBeg = false
+                        getgenv().BoostHubConfig.AutoBeg = false
                         getgenv().BoostHubConfig.AutoBeg = false
                         humanoid.WalkSpeed = 16
                         break
@@ -1440,7 +1434,7 @@ AutomationTab:Toggle({
                         local stuckTime = 0
                         local lastPos = hrp.Position
 
-                        while getgenv().AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                        while getgenv().BoostHubConfig.AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
                             local targetHrp = targetPlayer.Character.HumanoidRootPart
                             local randomStuds = math.random(5, 7)
                             local destination = targetHrp.Position + (targetHrp.CFrame.LookVector * randomStuds)
@@ -1464,7 +1458,7 @@ AutomationTab:Toggle({
                                 local waypoints = path:GetWaypoints()
                                 local waypointIndex = 1
 
-                                while waypointIndex <= #waypoints and getgenv().AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                                while waypointIndex <= #waypoints and getgenv().BoostHubConfig.AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
                                     local currentTargetPos = targetPlayer.Character.HumanoidRootPart.Position
                                     local currentDest = currentTargetPos + (targetPlayer.Character.HumanoidRootPart.CFrame.LookVector * randomStuds)
                                     if (destination - currentDest).Magnitude > 8 then
@@ -1485,7 +1479,7 @@ AutomationTab:Toggle({
                                     end)
 
                                     local startWait = tick()
-                                    while not reached and tick() - startWait < 1.2 and getgenv().AutoBeg do
+                                    while not reached and tick() - startWait < 1.2 and getgenv().BoostHubConfig.AutoBeg do
                                         task.wait(0.1)
                                         if (hrp.Position - lastPos).Magnitude < 1 then
                                             stuckTime = stuckTime + 0.1
@@ -1527,13 +1521,13 @@ AutomationTab:Toggle({
                             continue
                         end
 
-                        if getgenv().AutoBeg and autoBegSayEnabled and targetPlayer and targetPlayer.Name then
+                        if getgenv().BoostHubConfig.AutoBeg and autoBegSayEnabled and targetPlayer and targetPlayer.Name then
                             local greetingMsg = string.format(autoBegMessageTemplate, targetPlayer.Name)
                             SendChatMessage(greetingMsg)
                         end
 
                         local elapsed = 0
-                        while elapsed < 25 and getgenv().AutoBeg do
+                        while elapsed < 25 and getgenv().BoostHubConfig.AutoBeg do
                             if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
                                 local targetHrp = targetPlayer.Character.HumanoidRootPart
                                 
@@ -1558,7 +1552,7 @@ AutomationTab:Toggle({
                         task.wait(3)
                     end
 
-                    if getgenv().AutoBeg and char and char:FindFirstChildOfClass("Humanoid") then
+                    if getgenv().BoostHubConfig.AutoBeg and char and char:FindFirstChildOfClass("Humanoid") then
                         char.Humanoid.Health = 0 
                         task.wait(2.5) 
                     end
@@ -1580,113 +1574,7 @@ AutomationTab:Toggle({
 
 AutomationTab:Section({ Title = "Advanced Automation & Chat" })
 
-local autoEquipSign = false
-local charAddedConn
-AutomationTab:Toggle({
-    Title = "Auto Equip Sign on Spawn",
-    Desc = "Automatically equips your sign tool when you respawn",
-    Value = false,
-    Callback = function(state)
-        autoEquipSign = state
-        if state and not getgenv().AntiBanEnabled then
-            WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
-        end
-        local player = game.Players.LocalPlayer
-        if state then
-            charAddedConn = player.CharacterAdded:Connect(function(char)
-                if not autoEquipSign then return end
-                task.wait(1.5)
-                local humanoid = char:FindFirstChildOfClass("Humanoid")
-                if humanoid then
-                    local signTool = player.Backpack:FindFirstChild("DonationSign") or char:FindFirstChild("DonationSign")
-                    if signTool then
-                        humanoid:EquipTool(signTool)
-                    end
-                end
-            end)
-            WindUI:Notify({ Title = "Auto Equip", Content = "Auto Equip Sign enabled!", Duration = 3 })
-        else
-            if charAddedConn then charAddedConn:Disconnect() end
-        end
-    end,
-})
-
-local autoRejoin = false
-local rejoinConn
-AutomationTab:Toggle({
-    Title = "Auto Rejoin on Kick",
-    Desc = "Automatically rejoins the game if disconnected or kicked",
-    Value = false,
-    Callback = function(state)
-        autoRejoin = state
-        if state then
-            rejoinConn = game:GetService("CoreGui").ChildAdded:Connect(function(child)
-                if autoRejoin and (child.Name == "RobloxPromptGui" or child.Name == "ErrorPrompt") then
-                    task.wait(2)
-                    game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer)
-                end
-            end)
-            WindUI:Notify({ Title = "Auto Rejoin", Content = "Auto Rejoin enabled!", Duration = 3 })
-        else
-            if rejoinConn then rejoinConn:Disconnect() end
-        end
-    end,
-})
-
-AutomationTab:Section({ Title = "Custom Auto Spam Messages" })
-
-AutomationTab:Input({
-    Title = "Spam Message 1",
-    Desc = "Edit spam message #1",
-    Placeholder = "Enter message...",
-    Value = autoChatMessages[1],
-    Callback = function(text)
-        if text ~= "" then autoChatMessages[1] = text end
-    end,
-})
-
-AutomationTab:Input({
-    Title = "Spam Message 2",
-    Desc = "Edit spam message #2",
-    Placeholder = "Enter message...",
-    Value = autoChatMessages[2],
-    Callback = function(text)
-        if text ~= "" then autoChatMessages[2] = text end
-    end,
-})
-
-AutomationTab:Input({
-    Title = "Spam Message 3",
-    Desc = "Edit spam message #3",
-    Placeholder = "Enter message...",
-    Value = autoChatMessages[3],
-    Callback = function(text)
-        if text ~= "" then autoChatMessages[3] = text end
-    end,
-})
-
-AutomationTab:Input({
-    Title = "Spam Message 4",
-    Desc = "Edit spam message #4",
-    Placeholder = "Enter message...",
-    Value = autoChatMessages[4],
-    Callback = function(text)
-        if text ~= "" then autoChatMessages[4] = text end
-    end,
-})
-
-AutomationTab:Input({
-    Title = "Spam Message 5",
-    Desc = "Edit spam message #5",
-    Placeholder = "Enter message...",
-    Value = autoChatMessages[5],
-    Callback = function(text)
-        if text ~= "" then autoChatMessages[5] = text end
-    end,
-})
-
--- AUTO CHAT SPAMMER
-AutomationTab:Toggle({
+local autoChatSpamToggle = AutomationTab:Toggle({
     Title = "Auto Chat Spammer",
     Desc = "Sends a random custom message from your 5 fields every 25 seconds",
     Value = getgenv().BoostHubConfig.AutoChatSpam,
@@ -1698,7 +1586,7 @@ AutomationTab:Toggle({
                 WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             end
             task.spawn(function()
-                while getgenv().AutoChatSpam do
+                while getgenv().BoostHubConfig.AutoChatSpam do
                     local activeMessages = {}
                     for _, msg in ipairs(autoChatMessages) do
                         if msg and msg ~= "" then
@@ -1717,7 +1605,7 @@ AutomationTab:Toggle({
                     end
                     
                     local elapsed = 0
-                    while elapsed < waitTime and getgenv().AutoChatSpam do
+                    while elapsed < waitTime and getgenv().BoostHubConfig.AutoChatSpam do
                         task.wait(0.5)
                         elapsed = elapsed + 0.5
                     end
@@ -1727,6 +1615,23 @@ AutomationTab:Toggle({
         end
     end,
 })
+
+-- FUNCTION TO FORCE UI CONTROLS TO SYNC WITH LOADED CONFIG VALUES
+updateTogglesAndSettings = function()
+    pcall(function()
+        if walkSpeedSlider and walkSpeedSlider.SetValue then walkSpeedSlider:SetValue(getgenv().BoostHubConfig.WalkSpeed) end
+        if jumpPowerSlider and jumpPowerSlider.SetValue then jumpPowerSlider:SetValue(getgenv().BoostHubConfig.JumpPower) end
+        if renderToggle and renderToggle.SetValue then renderToggle:SetValue(getgenv().BoostHubConfig.Disable3DRender) end
+        if catClickToggle and catClickToggle.SetValue then catClickToggle:SetValue(getgenv().BoostHubConfig.AutoCatClick) end
+        if rngToggle and rngToggle.SetValue then rngToggle:SetValue(getgenv().BoostHubConfig.AutoRNG) end
+        if goalToggle and goalToggle.SetValue then goalToggle:SetValue(getgenv().BoostHubConfig.AutoGoal) end
+        if orbsToggle and orbsToggle.SetValue then orbsToggle:SetValue(getgenv().BoostHubConfig.AutoCollectOrbs) end
+        if antiBanToggle and antiBanToggle.SetValue then antiBanToggle:SetValue(getgenv().BoostHubConfig.AntiBanEnabled) end
+        if autoClaimStandToggle and autoClaimStandToggle.SetValue then autoClaimStandToggle:SetValue(getgenv().BoostHubConfig.AutoClaimStand) end
+        if autoBegToggle and autoBegToggle.SetValue then autoBegToggle:SetValue(getgenv().BoostHubConfig.AutoBeg) end
+        if autoChatSpamToggle and autoChatSpamToggle.SetValue then autoChatSpamToggle:SetValue(getgenv().BoostHubConfig.AutoChatSpam) end
+    end)
+end
 
 -- =============================================================
 --                        6. HOP TAB
