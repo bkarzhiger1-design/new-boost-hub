@@ -147,15 +147,15 @@ Players.PlayerAdded:Connect(function(p)
 end)
 
 -- FORWARD DECLARATIONS FOR UI CALLBACKS & HANDLERS
-local updateTogglesAndSettings, updateConfigDropdown
+local updateTogglesAndSettings
 local applyAutoCatClick, applyAutoRNG, applyAutoGoal, applyAutoCollectOrbs, applyAutoClaimStand, applyAutoBeg, applyAutoChatSpam, applyDisable3DRender
 
 -- CONFIGURATION SYSTEM FUNCTIONS
 local function getSavedConfigsList()
     local list = { "DefaultConfig" }
     pcall(function()
-        if makefolder and not pcall(function() listfiles("BoostHubConfigs") end) then
-            makefolder("BoostHubConfigs")
+        if makefolder then
+            pcall(function() makefolder("BoostHubConfigs") end)
         end
         if listfiles then
             local files = listfiles("BoostHubConfigs")
@@ -180,8 +180,8 @@ local function saveConfiguration(configName)
         return
     end
     local success, err = pcall(function()
-        if makefolder and not pcall(function() listfiles("BoostHubConfigs") end) then
-            makefolder("BoostHubConfigs")
+        if makefolder then
+            pcall(function() makefolder("BoostHubConfigs") end)
         end
         local configData = {
             AutoCatClick = getgenv().BoostHubConfig.AutoCatClick,
@@ -511,7 +511,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Fixed configuration file reading/writing with debug error notifications\n[-] Added Refresh Config List button to update dropdowns",
+            Content = "[-] Added persistent begged players tracking so you never beg the same person twice\n[-] Added 40s automatic teleport fallback if pathfinding can't reach a player\n[-] Improved configuration saving/loading reliability on mobile executors",
             Duration = 8
         })
     end,
@@ -1354,7 +1354,7 @@ AutomationTab:Input({
 })
 
 applyAutoBeg = function(state)
-    getgenv().AutoBeg = state
+    getgenv().BoostHubConfig.AutoBeg = state
     getgenv().BoostHubConfig.AutoBeg = state
 
     if state then
@@ -1362,7 +1362,7 @@ applyAutoBeg = function(state)
             WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
         end
 
-        WindUI:Notify({ Title = "Auto Beg", Content = "Auto Beg pathfinding started (Speed 23, 25s wait, facing player)!", Duration = 3 })
+        WindUI:Notify({ Title = "Auto Beg", Content = "Auto Beg pathfinding started (Speed 23, 40s timeout teleport, persistent filtering)!", Duration = 3 })
 
         task.spawn(function()
             local PathfindingService = game:GetService("PathfindingService")
@@ -1397,7 +1397,7 @@ applyAutoBeg = function(state)
 
                 if not equippedTool then
                     WindUI:Notify({ Title = "Auto Beg", Content = "Buy a Sign in a shop for this to work!", Duration = 6 })
-                    getgenv().AutoBeg = false
+                    getgenv().BoostHubConfig.AutoBeg = false
                     getgenv().BoostHubConfig.AutoBeg = false
                     humanoid.WalkSpeed = 16
                     break
@@ -1419,9 +1419,12 @@ applyAutoBeg = function(state)
                     end
                 end
 
+                -- Find valid target who hasn't been begged yet
                 local targetPlayer = nil
+                local validPlayerCount = 0
+
                 for _, p in ipairs(game.Players:GetPlayers()) do
-                    if p ~= player and not beggedPlayers[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                         local tracker = playerTrackers[p.UserId]
                         local isAfk = false
                         if tracker and (currentTime - tracker.time) >= 180 then
@@ -1437,32 +1440,8 @@ applyAutoBeg = function(state)
                                 end
                             end
                             if hasPaidItem then
-                                targetPlayer = p
-                                break
-                            end
-                        end
-                    end
-                end
-
-                if not targetPlayer then
-                    beggedPlayers = {}
-                    for _, p in ipairs(game.Players:GetPlayers()) do
-                        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                            local tracker = playerTrackers[p.UserId]
-                            local isAfk = false
-                            if tracker and (currentTime - tracker.time) >= 180 then
-                                isAfk = true
-                            end
-
-                            if not isAfk then
-                                local hasPaidItem = false
-                                for _, desc in ipairs(p.Character:GetDescendants()) do
-                                    if desc:IsA("Accessory") or desc:IsA("Clothing") or desc:IsA("ShirtGraphic") or desc:IsA("BodyColors") then
-                                        hasPaidItem = true
-                                        break
-                                    end
-                                end
-                                if hasPaidItem then
+                                validPlayerCount = validPlayerCount + 1
+                                if not beggedPlayers[p.UserId] then
                                     targetPlayer = p
                                     break
                                 end
@@ -1471,20 +1450,37 @@ applyAutoBeg = function(state)
                     end
                 end
 
+                -- If all valid players have been begged, reset the begged list so it can loop again
+                if not targetPlayer and validPlayerCount > 0 then
+                    beggedPlayers = {}
+                    task.wait(1)
+                    continue
+                end
+
                 if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
                     beggedPlayers[targetPlayer.UserId] = true 
                     
-                    local stuckTime = 0
-                    local lastPos = hrp.Position
+                    local attemptStartTime = tick()
+                    local reachedTarget = false
 
                     while getgenv().BoostHubConfig.AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
                         local targetHrp = targetPlayer.Character.HumanoidRootPart
-                        local randomStuds = math.random(5, 7)
-                        local destination = targetHrp.Position + (targetHrp.CFrame.LookVector * randomStuds)
 
-                        if (hrp.Position - targetHrp.Position).Magnitude <= 8 then
+                        -- IF CAN'T REACH FOR MORE THAN 40 SECONDS -> TELEPORT DIRECTLY TO THEM!
+                        if tick() - attemptStartTime >= 40 then
+                            hrp.CFrame = targetHrp.CFrame + Vector3.new(0, 3, 0)
+                            task.wait(0.5)
+                            reachedTarget = true
                             break
                         end
+
+                        if (hrp.Position - targetHrp.Position).Magnitude <= 8 then
+                            reachedTarget = true
+                            break
+                        end
+
+                        local randomStuds = math.random(5, 7)
+                        local destination = targetHrp.Position + (targetHrp.CFrame.LookVector * randomStuds)
 
                         local path = PathfindingService:CreatePath({
                             AgentRadius = 2,
@@ -1501,10 +1497,11 @@ applyAutoBeg = function(state)
                             local waypointIndex = 1
 
                             while waypointIndex <= #waypoints and getgenv().BoostHubConfig.AutoBeg and targetPlayer and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
-                                local currentTargetPos = targetPlayer.Character.HumanoidRootPart.Position
-                                local currentDest = currentTargetPos + (targetPlayer.Character.HumanoidRootPart.CFrame.LookVector * randomStuds)
-                                if (destination - currentDest).Magnitude > 8 then
-                                    break 
+                                if tick() - attemptStartTime >= 40 then
+                                    hrp.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+                                    task.wait(0.5)
+                                    reachedTarget = true
+                                    break
                                 end
 
                                 local waypoint = waypoints[waypointIndex]
@@ -1523,33 +1520,10 @@ applyAutoBeg = function(state)
                                 local startWait = tick()
                                 while not reached and tick() - startWait < 1.2 and getgenv().BoostHubConfig.AutoBeg do
                                     task.wait(0.1)
-                                    if (hrp.Position - lastPos).Magnitude < 1 then
-                                        stuckTime = stuckTime + 0.1
-                                        if stuckTime >= 18 then
-                                            if conn then conn:Disconnect() end
-                                            break
-                                        end
-                                    else
-                                        lastPos = hrp.Position
-                                        stuckTime = 0
-                                    end
                                 end
                                 if conn then conn:Disconnect() end
 
-                                if stuckTime >= 18 then break end
                                 waypointIndex = waypointIndex + 1
-                            end
-
-                            if stuckTime >= 18 then
-                                if char and char:FindFirstChildOfClass("Humanoid") then
-                                    char.Humanoid.Health = 0
-                                    task.wait(2.5)
-                                    break
-                                end
-                            end
-
-                            if (hrp.Position - targetHrp.Position).Magnitude <= 8 then
-                                break
                             end
                         else
                             humanoid:MoveTo(destination)
@@ -1558,30 +1532,28 @@ applyAutoBeg = function(state)
                         task.wait(0.2)
                     end
 
-                    if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then
-                        continue
-                    end
-
-                    if getgenv().BoostHubConfig.AutoBeg and autoBegSayEnabled and targetPlayer and targetPlayer.Name then
-                        local greetingMsg = string.format(autoBegMessageTemplate, targetPlayer.Name)
-                        SendChatMessage(greetingMsg)
-                    end
-
-                    local elapsed = 0
-                    while elapsed < 25 and getgenv().BoostHubConfig.AutoBeg do
-                        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                            local targetHrp = targetPlayer.Character.HumanoidRootPart
-                            local lookAtPos = Vector3.new(targetHrp.Position.X, hrp.Position.Y, targetHrp.Position.Z)
-                            hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
-
-                            if (hrp.Position - targetHrp.Position).Magnitude > 10 then
-                                humanoid:MoveTo(targetHrp.Position)
-                            end
-                        else
-                            break 
+                    if reachedTarget and targetPlayer and targetPlayer.Parent and targetPlayer.Character then
+                        if getgenv().BoostHubConfig.AutoBeg and autoBegSayEnabled and targetPlayer and targetPlayer.Name then
+                            local greetingMsg = string.format(autoBegMessageTemplate, targetPlayer.Name)
+                            SendChatMessage(greetingMsg)
                         end
-                        task.wait(0.5)
-                        elapsed = elapsed + 0.5
+
+                        local elapsed = 0
+                        while elapsed < 25 and getgenv().BoostHubConfig.AutoBeg do
+                            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                                local targetHrp = targetPlayer.Character.HumanoidRootPart
+                                local lookAtPos = Vector3.new(targetHrp.Position.X, hrp.Position.Y, targetHrp.Position.Z)
+                                hrp.CFrame = CFrame.lookAt(hrp.Position, lookAtPos)
+
+                                if (hrp.Position - targetHrp.Position).Magnitude > 10 then
+                                    humanoid:MoveTo(targetHrp.Position)
+                                end
+                            else
+                                break 
+                            end
+                            task.wait(0.5)
+                            elapsed = elapsed + 0.5
+                        end
                     end
                 else
                     local spawnLoc = workspace:FindFirstChild("SpawnLocation", true)
@@ -1592,10 +1564,7 @@ applyAutoBeg = function(state)
                     task.wait(3)
                 end
 
-                if getgenv().BoostHubConfig.AutoBeg and char and char:FindFirstChildOfClass("Humanoid") then
-                    char.Humanoid.Health = 0 
-                    task.wait(2.5) 
-                end
+                task.wait(1)
             end
 
             local currentLocalChar = game.Players.LocalPlayer.Character
@@ -2202,8 +2171,8 @@ ConfigureTab:Button({
     Callback = function()
         if writefile then
             pcall(function()
-                if makefolder and not pcall(function() listfiles("BoostHubConfigs") end) then
-                    makefolder("BoostHubConfigs")
+                if makefolder then
+                    pcall(function() makefolder("BoostHubConfigs") end)
                 end
                 writefile("BoostHubConfigs/AutoLoadConfig.json", autoLoadConfigName)
                 WindUI:Notify({ Title = "Auto Load Saved", Content = "Will auto-load configuration: " .. autoLoadConfigName, Duration = 3 })
