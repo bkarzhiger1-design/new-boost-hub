@@ -175,7 +175,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Added tool loading buffer delay after character respawn for Auto Beg\n[-] All tabs and features fully loaded",
+            Content = "[-] Increased Auto Chat Spammer delay to 25s\n[-] Added unique player tracking and anti-stuck position reset (15-20s) for Auto Beg",
             Duration = 8
         })
     end,
@@ -1032,10 +1032,10 @@ AutomationTab:Button({
     end,
 })
 
--- AUTO BEG TOGGLE (PATHFINDING WALKING MODE + TOOL BUFFER FIX)
+-- AUTO BEG TOGGLE (PATHFINDING + UNIQUE PLAYER TRACKING + ANTI-STUCK RESET)
 AutomationTab:Toggle({
     Title = "Auto Beg",
-    Desc = "Pathfinds and walks to players with paid items, stopping 5-7 studs in front",
+    Desc = "Pathfinds to unvisited paid-item players, skips duplicates, and resets if stuck",
     Value = getgenv().BoostHubConfig.AutoBeg,
     Callback = function(state)
         getgenv().AutoBeg = state
@@ -1050,6 +1050,7 @@ AutomationTab:Toggle({
 
             task.spawn(function()
                 local PathfindingService = game:GetService("PathfindingService")
+                local beggedPlayers = {} -- Tracks players you have already visited
 
                 -- Buffer delay on startup/respawn to let inventory load the tool
                 task.wait(2.5)
@@ -1068,7 +1069,7 @@ AutomationTab:Toggle({
                     -- 1. Check if holding a tool (with backpack fallback and retry buffer)
                     local equippedTool = char:FindFirstChildOfClass("Tool")
                     if not equippedTool then
-                        task.wait(1) -- Extra second to ensure backpack items loaded after reset
+                        task.wait(1)
                         local backpackTool = player.Backpack and player.Backpack:FindFirstChildOfClass("Tool")
                         if backpackTool then
                             humanoid:EquipTool(backpackTool)
@@ -1084,10 +1085,10 @@ AutomationTab:Toggle({
                         break
                     end
 
-                    -- 2. Scan players for paid items
+                    -- 2. Scan players for paid items (skipping already visited players)
                     local targetPlayer = nil
                     for _, p in ipairs(game.Players:GetPlayers()) do
-                        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        if p ~= player and not beggedPlayers[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                             local hasPaidItem = false
                             for _, desc in ipairs(p.Character:GetDescendants()) do
                                 if desc:IsA("Accessory") or desc:IsA("Clothing") or desc:IsA("ShirtGraphic") or desc:IsA("BodyColors") then
@@ -1102,12 +1103,33 @@ AutomationTab:Toggle({
                         end
                     end
 
+                    -- If everyone in the server has already been visited, clear history to loop again
+                    if not targetPlayer then
+                        beggedPlayers = {}
+                        for _, p in ipairs(game.Players:GetPlayers()) do
+                            if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                                local hasPaidItem = false
+                                for _, desc in ipairs(p.Character:GetDescendants()) do
+                                    if desc:IsA("Accessory") or desc:IsA("Clothing") or desc:IsA("ShirtGraphic") or desc:IsA("BodyColors") then
+                                        hasPaidItem = true
+                                        break
+                                    end
+                                end
+                                if hasPaidItem then
+                                    targetPlayer = p
+                                    break
+                                end
+                            end
+                        end
+                    end
+
                     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        beggedPlayers[targetPlayer.UserId] = true -- Mark player as visited
                         local targetHrp = targetPlayer.Character.HumanoidRootPart
                         local randomStuds = math.random(5, 7)
                         local destination = targetHrp.Position + (targetHrp.CFrame.LookVector * randomStuds)
 
-                        -- Pathfinding Walk Route
+                        -- Pathfinding Walk Route with Anti-Stuck Position Check
                         local path = PathfindingService:CreatePath({
                             AgentRadius = 2,
                             AgentHeight = 5,
@@ -1120,6 +1142,9 @@ AutomationTab:Toggle({
 
                         if success and path.Status == Enum.PathStatus.Success then
                             local waypoints = path:GetWaypoints()
+                            local lastPos = hrp.Position
+                            local stuckTime = 0
+
                             for _, waypoint in ipairs(waypoints) do
                                 if not getgenv().AutoBeg then break end
                                 humanoid:MoveTo(waypoint.Position)
@@ -1137,11 +1162,32 @@ AutomationTab:Toggle({
                                 local startWait = tick()
                                 while not reached and tick() - startWait < 1.5 and getgenv().AutoBeg do
                                     task.wait(0.1)
+                                    -- Anti-stuck check: if position hasn't changed much over 15-20 seconds total
+                                    if (hrp.Position - lastPos).Magnitude < 1 then
+                                        stuckTime = stuckTime + 0.1
+                                        if stuckTime >= 18 then -- 18 seconds threshold
+                                            if conn then conn:Disconnect() end
+                                            break
+                                        end
+                                    else
+                                        lastPos = hrp.Position
+                                        stuckTime = 0
+                                    end
                                 end
                                 if conn then conn:Disconnect() end
+
+                                if stuckTime >= 18 then break end
+                            end
+
+                            -- If stuck for too long, break out early to reset character
+                            if stuckTime >= 18 then
+                                if char and char:FindFirstChildOfClass("Humanoid") then
+                                    char.Humanoid.Health = 0
+                                    task.wait(2.5)
+                                    continue
+                                end
                             end
                         else
-                            -- Fallback direct move if pathfinding fails
                             humanoid:MoveTo(destination)
                         end
                     else
@@ -1279,9 +1325,10 @@ AutomationTab:Input({
     end,
 })
 
+-- AUTO CHAT SPAMMER (UPDATED TO 25 SECONDS DELAY)
 AutomationTab:Toggle({
     Title = "Auto Chat Spammer",
-    Desc = "Sends a random custom message from your 5 fields every 15 seconds",
+    Desc = "Sends a random custom message from your 5 fields every 25 seconds",
     Value = getgenv().BoostHubConfig.AutoChatSpam,
     Callback = function(state)
         getgenv().AutoChatSpam = state
@@ -1304,9 +1351,9 @@ AutomationTab:Toggle({
                         SendChatMessage(activeMessages[randomIndex])
                     end
                     
-                    local waitTime = 15
+                    local waitTime = 25 -- Updated from 15 to 25 seconds
                     if getgenv().AntiBanEnabled then
-                        waitTime = waitTime + math.random(-3, 4)
+                        waitTime = waitTime + math.random(-4, 5)
                     end
                     
                     local elapsed = 0
@@ -1316,7 +1363,7 @@ AutomationTab:Toggle({
                     end
                 end
             end)
-            WindUI:Notify({ Title = "Auto Chat", Content = "Auto Chat Spammer enabled!", Duration = 3 })
+            WindUI:Notify({ Title = "Auto Chat", Content = "Auto Chat Spammer enabled (25s delay)!", Duration = 3 })
         end
     end,
 })
