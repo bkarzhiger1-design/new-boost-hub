@@ -175,7 +175,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Added targeted player greeting chat message to Auto Beg",
+            Content = "[-] Auto Beg now checks specifically for 'DonationSign' tool\n[-] WalkSpeed automatically adjusts to 23 during Auto Beg",
             Duration = 8
         })
     end,
@@ -1032,10 +1032,10 @@ AutomationTab:Button({
     end,
 })
 
--- AUTO BEG TOGGLE (PATHFINDING + PLAYER TRACKING + ANTI-STUCK + AFK FILTER + TARGET GREETING)
+-- AUTO BEG TOGGLE (PATHFINDING + 'DonationSign' ONLY + SPEED 23 + TARGET GREETING)
 AutomationTab:Toggle({
     Title = "Auto Beg",
-    Desc = "Pathfinds to active players, greets them by name, skips AFK > 3m, and resets if stuck",
+    Desc = "Pathfinds to active players using DonationSign, greets them, and resets if stuck",
     Value = getgenv().BoostHubConfig.AutoBeg,
     Callback = function(state)
         getgenv().AutoBeg = state
@@ -1046,14 +1046,13 @@ AutomationTab:Toggle({
                 WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 4 })
             end
 
-            WindUI:Notify({ Title = "Auto Beg", Content = "Auto Beg pathfinding started!", Duration = 3 })
+            WindUI:Notify({ Title = "Auto Beg", Content = "Auto Beg pathfinding started (Speed set to 23)!", Duration = 3 })
 
             task.spawn(function()
                 local PathfindingService = game:GetService("PathfindingService")
-                local beggedPlayers = {} -- Tracks players you have already visited
-                local playerTrackers = {} -- Tracks player positions and stillness duration for AFK detection
+                local beggedPlayers = {} 
+                local playerTrackers = {} 
 
-                -- Buffer delay on startup/respawn to let inventory load the tool
                 task.wait(2.5)
 
                 while getgenv().AutoBeg do
@@ -1067,15 +1066,18 @@ AutomationTab:Toggle({
                     local hrp = char.HumanoidRootPart
                     local humanoid = char.Humanoid
 
-                    -- 1. Check if holding a tool (with backpack fallback and retry buffer)
-                    local equippedTool = char:FindFirstChildOfClass("Tool")
+                    -- Force walk speed to 23 during Auto Beg
+                    humanoid.WalkSpeed = 23
+
+                    -- 1. Check specifically for 'DonationSign' tool in character or backpack
+                    local equippedTool = char:FindFirstChild("DonationSign")
                     if not equippedTool then
                         task.wait(1)
-                        local backpackTool = player.Backpack and player.Backpack:FindFirstChildOfClass("Tool")
+                        local backpackTool = player.Backpack and player.Backpack:FindFirstChild("DonationSign")
                         if backpackTool then
                             humanoid:EquipTool(backpackTool)
                             task.wait(0.8)
-                            equippedTool = char:FindFirstChildOfClass("Tool")
+                            equippedTool = char:FindFirstChild("DonationSign")
                         end
                     end
 
@@ -1083,6 +1085,7 @@ AutomationTab:Toggle({
                         WindUI:Notify({ Title = "Auto Beg", Content = "Buy a Sign in a shop for this to work!", Duration = 6 })
                         getgenv().AutoBeg = false
                         getgenv().BoostHubConfig.AutoBeg = false
+                        humanoid.WalkSpeed = 16
                         break
                     end
 
@@ -1095,7 +1098,7 @@ AutomationTab:Toggle({
                                 playerTrackers[p.UserId] = { pos = pPos, time = currentTime }
                             else
                                 local data = playerTrackers[p.UserId]
-                                if (pPos - data.pos).Magnitude > 3 then -- Moved more than 3 studs, reset timer
+                                if (pPos - data.pos).Magnitude > 3 then 
                                     data.pos = pPos
                                     data.time = currentTime
                                 end
@@ -1107,7 +1110,6 @@ AutomationTab:Toggle({
                     local targetPlayer = nil
                     for _, p in ipairs(game.Players:GetPlayers()) do
                         if p ~= player and not beggedPlayers[p.UserId] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                            -- Check AFK status (> 180 seconds / 3 minutes stationary)
                             local tracker = playerTrackers[p.UserId]
                             local isAfk = false
                             if tracker and (currentTime - tracker.time) >= 180 then
@@ -1130,7 +1132,6 @@ AutomationTab:Toggle({
                         end
                     end
 
-                    -- If no active non-AFK players are left, clear history and try again
                     if not targetPlayer then
                         beggedPlayers = {}
                         for _, p in ipairs(game.Players:GetPlayers()) do
@@ -1159,12 +1160,11 @@ AutomationTab:Toggle({
                     end
 
                     if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        beggedPlayers[targetPlayer.UserId] = true -- Mark player as visited
+                        beggedPlayers[targetPlayer.UserId] = true 
                         local targetHrp = targetPlayer.Character.HumanoidRootPart
                         local randomStuds = math.random(5, 7)
                         local destination = targetHrp.Position + (targetHrp.CFrame.LookVector * randomStuds)
 
-                        -- Pathfinding Walk Route with Anti-Stuck Position Check
                         local path = PathfindingService:CreatePath({
                             AgentRadius = 2,
                             AgentHeight = 5,
@@ -1197,10 +1197,9 @@ AutomationTab:Toggle({
                                 local startWait = tick()
                                 while not reached and tick() - startWait < 1.5 and getgenv().AutoBeg do
                                     task.wait(0.1)
-                                    -- Anti-stuck check: if position hasn't changed much over 15-20 seconds total
                                     if (hrp.Position - lastPos).Magnitude < 1 then
                                         stuckTime = stuckTime + 0.1
-                                        if stuckTime >= 18 then -- 18 seconds threshold
+                                        if stuckTime >= 18 then 
                                             if conn then conn:Disconnect() end
                                             break
                                         end
@@ -1214,7 +1213,6 @@ AutomationTab:Toggle({
                                 if stuckTime >= 18 then break end
                             end
 
-                            -- If stuck for too long, break out early to reset character
                             if stuckTime >= 18 then
                                 if char and char:FindFirstChildOfClass("Humanoid") then
                                     char.Humanoid.Health = 0
@@ -1226,13 +1224,11 @@ AutomationTab:Toggle({
                             humanoid:MoveTo(destination)
                         end
 
-                        -- Send targeted greeting message to chat once arrived near the player
                         if getgenv().AutoBeg and targetPlayer and targetPlayer.Name then
                             local greetingMsg = string.format("Hello %s, would you like to donate me? Any donation is highly appreciated :D", targetPlayer.Name)
                             SendChatMessage(greetingMsg)
                         end
                     else
-                        -- No active players with items found: walk to SpawnLocation and wait
                         local spawnLoc = workspace:FindFirstChild("SpawnLocation", true)
                         if spawnLoc then
                             local spawnPos = spawnLoc:IsA("Model") and spawnLoc:GetPivot().Position or spawnLoc.Position
@@ -1240,7 +1236,6 @@ AutomationTab:Toggle({
                         end
                     end
 
-                    -- Wait for 15 seconds, then reset character to search for another player
                     local elapsed = 0
                     while elapsed < 15 and getgenv().AutoBeg do
                         task.wait(0.5)
@@ -1248,11 +1243,22 @@ AutomationTab:Toggle({
                     end
 
                     if getgenv().AutoBeg and char and char:FindFirstChildOfClass("Humanoid") then
-                        char.Humanoid.Health = 0 -- Reset character
-                        task.wait(2.5) -- Wait for respawn and tool loading buffer
+                        char.Humanoid.Health = 0 
+                        task.wait(2.5) 
                     end
                 end
+
+                -- Reset speed back to normal when toggled off
+                local currentLocalChar = game.Players.LocalPlayer.Character
+                if currentLocalChar and currentLocalChar:FindFirstChildOfClass("Humanoid") then
+                    currentLocalChar.Humanoid.WalkSpeed = 16
+                end
             end)
+        else
+            local currentLocalChar = game.Players.LocalPlayer.Character
+            if currentLocalChar and currentLocalChar:FindFirstChildOfClass("Humanoid") then
+                currentLocalChar.Humanoid.WalkSpeed = 16
+            end
         end
     end,
 })
@@ -1277,11 +1283,9 @@ AutomationTab:Toggle({
                 task.wait(1.5)
                 local humanoid = char:FindFirstChildOfClass("Humanoid")
                 if humanoid then
-                    for _, tool in pairs(player.Backpack:GetChildren()) do
-                        if tool:IsA("Tool") then
-                            humanoid:EquipTool(tool)
-                            break
-                        end
+                    local signTool = player.Backpack:FindFirstChild("DonationSign") or char:FindFirstChild("DonationSign")
+                    if signTool then
+                        humanoid:EquipTool(signTool)
                     end
                 end
             end)
