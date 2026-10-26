@@ -147,21 +147,26 @@ Players.PlayerAdded:Connect(function(p)
 end)
 
 -- FORWARD DECLARATIONS FOR UI CALLBACKS & HANDLERS
-local updateTogglesAndSettings
+local updateTogglesAndSettings, updateConfigDropdown
 local applyAutoCatClick, applyAutoRNG, applyAutoGoal, applyAutoCollectOrbs, applyAutoClaimStand, applyAutoBeg, applyAutoChatSpam, applyDisable3DRender
 
 -- CONFIGURATION SYSTEM FUNCTIONS
 local function getSavedConfigsList()
     local list = { "DefaultConfig" }
     pcall(function()
+        if makefolder and not pcall(function() listfiles("BoostHubConfigs") end) then
+            makefolder("BoostHubConfigs")
+        end
         if listfiles then
             local files = listfiles("BoostHubConfigs")
             for _, file in ipairs(files) do
                 local name = file:match("([^/]+)$")
-                name = name:match("([^\]+)$")
-                if name and name:sub(-5) == ".json" then
-                    local configName = name:sub(1, -6)
-                    table.insert(list, configName)
+                if name then
+                    name = name:match("([^\]+)$") or name
+                    if name and name:sub(-5) == ".json" then
+                        local configName = name:sub(1, -6)
+                        table.insert(list, configName)
+                    end
                 end
             end
         end
@@ -171,10 +176,10 @@ end
 
 local function saveConfiguration(configName)
     if not writefile then
-        WindUI:Notify({ Title = "Error", Content = "Your executor does not support writefile!", Duration = 3 })
+        WindUI:Notify({ Title = "Error", Content = "Your executor does not support writefile!", Duration = 5 })
         return
     end
-    pcall(function()
+    local success, err = pcall(function()
         if makefolder and not pcall(function() listfiles("BoostHubConfigs") end) then
             makefolder("BoostHubConfigs")
         end
@@ -198,12 +203,20 @@ local function saveConfiguration(configName)
         }
         local encoded = HttpService:JSONEncode(configData)
         writefile("BoostHubConfigs/" .. configName .. ".json", encoded)
-        WindUI:Notify({ Title = "Configuration Saved", Content = "Successfully saved configuration: " .. configName, Duration = 3 })
     end)
+
+    if success then
+        WindUI:Notify({ Title = "Configuration Saved", Content = "Successfully saved configuration: " .. configName, Duration = 3 })
+    else
+        WindUI:Notify({ Title = "Save Error", Content = tostring(err), Duration = 6 })
+    end
 end
 
 local function loadConfiguration(configName)
-    if not readfile then return end
+    if not readfile then
+        WindUI:Notify({ Title = "Error", Content = "Your executor does not support readfile!", Duration = 5 })
+        return
+    end
     local success, content = pcall(function()
         return readfile("BoostHubConfigs/" .. configName .. ".json")
     end)
@@ -212,7 +225,6 @@ local function loadConfiguration(configName)
             return HttpService:JSONDecode(content)
         end)
         if successDecode and type(data) == "table" then
-            -- Apply settings and restart feature loops
             applyAutoCatClick(data.AutoCatClick or false)
             applyAutoRNG(data.AutoRNG or false)
             applyAutoGoal(data.AutoGoal or false)
@@ -236,7 +248,6 @@ local function loadConfiguration(configName)
             end
             getgenv().BoostHubConfig.AutoExecuteEnabled = data.AutoExecuteEnabled or false
 
-            -- Apply WalkSpeed & JumpPower to character
             pcall(function()
                 local char = game.Players.LocalPlayer.Character
                 if char and char:FindFirstChild("Humanoid") then
@@ -251,7 +262,11 @@ local function loadConfiguration(configName)
             end
 
             WindUI:Notify({ Title = "Configuration Loaded", Content = "Loaded configuration: " .. configName, Duration = 3 })
+        else
+            WindUI:Notify({ Title = "Load Error", Content = "Failed to parse JSON configuration file.", Duration = 4 })
         end
+    else
+        WindUI:Notify({ Title = "Load Error", Content = "Config file '" .. configName .. "' not found!", Duration = 4 })
     end
 end
 
@@ -496,7 +511,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Fixed configuration loading logic to start all feature loops instantly\n[-] Added strict stand validation to prevent shop stand false positives",
+            Content = "[-] Fixed configuration file reading/writing with debug error notifications\n[-] Added Refresh Config List button to update dropdowns",
             Duration = 8
         })
     end,
@@ -2139,13 +2154,26 @@ ConfigureTab:Button({
     end,
 })
 
-ConfigureTab:Dropdown({
+local configDropdown = ConfigureTab:Dropdown({
     Title = "Select Configuration",
     Desc = "Choose an existing configuration file",
     Values = getSavedConfigsList(),
     Default = "DefaultConfig",
     Callback = function(selected)
         selectedConfigDropdown = selected
+    end,
+})
+
+ConfigureTab:Button({
+    Title = "Refresh Config List",
+    Desc = "Refreshes the configuration dropdown list",
+    Callback = function()
+        pcall(function()
+            if configDropdown and configDropdown.Refresh then
+                configDropdown:Refresh(getSavedConfigsList())
+            end
+        end)
+        WindUI:Notify({ Title = "Refreshed", Content = "Configuration list updated!", Duration = 2 })
     end,
 })
 
