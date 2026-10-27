@@ -298,9 +298,9 @@ local Window = WindUI:CreateWindow({
         end,
     },
     KeySystem = {
-        Key = { "KEY_29289274839" "keyPremium"2 }, 
+        Key = { "KEY_383783828299263", "KEY_PREMIUM_ONLY_12982" }, 
         Note = "Get your key from Linkvertise or use testing keys!",
-        URL = "https://link-center.net/10198436/iA3fmHzEuE2C1, 
+        URL = "https://linkvertise.com/10198436/EQPCQ263XIi1", 
         SaveKey = true,
     }
 })
@@ -2280,42 +2280,6 @@ SettingsTab:Keybind({
         Window:ToggleKey(key)
     end,
 })
--- (All your tabs, toggles, functions, and settings...)
-
--- =============================================================
---                 DISCORD POP-UP DIALOG (END OF SCRIPT)
--- =============================================================
-Window:Dialog({
-    Title = "Join Our Community!",
-    Content = "Would You Like To Join Our Discord Server?",
-    Buttons = {
-        {
-            Title = "Yes",
-            Callback = function()
-                if setclipboard then
-                    setclipboard("https://discord.gg/v2BxRgTEP")
-                    WindUI:Notify({
-                        Title = "Discord Link Copied!",
-                        Content = "The invite link has been copied to your clipboard.",
-                        Duration = 5
-                    })
-                else
-                    WindUI:Notify({
-                        Title = "Error",
-                        Content = "Your executor does not support setclipboard!",
-                        Duration = 5
-                    })
-                end
-            end
-        },
-        {
-            Title = "No",
-            Callback = function()
-                -- Dialog closes automatically
-            end
-        }
-    }
-})
 
 -- Send Loaded Toast Notification
 WindUI:Notify({
@@ -2323,4 +2287,3 @@ WindUI:Notify({
     Content = "Welcome to Boost Hub!",
     Duration = 4,
 })
-
