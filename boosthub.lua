@@ -298,7 +298,7 @@ local Window = WindUI:CreateWindow({
         end,
     },
     KeySystem = {
-        Key = { "KEY_29289274839 "keyPremium"2 }, 
+        Key = { "KEY_29289274839" "keyPremium"2 }, 
         Note = "Get your key from Linkvertise or use testing keys!",
         URL = "https://link-center.net/10198436/iA3fmHzEuE2C1, 
         SaveKey = true,
