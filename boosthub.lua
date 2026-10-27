@@ -2280,6 +2280,42 @@ SettingsTab:Keybind({
         Window:ToggleKey(key)
     end,
 })
+-- (All your tabs, toggles, functions, and settings...)
+
+-- =============================================================
+--                 DISCORD POP-UP DIALOG (END OF SCRIPT)
+-- =============================================================
+Window:Dialog({
+    Title = "Join Our Community!",
+    Content = "Would You Like To Join Our Discord Server?",
+    Buttons = {
+        {
+            Title = "Yes",
+            Callback = function()
+                if setclipboard then
+                    setclipboard("https://discord.gg/v2BxRgTEP")
+                    WindUI:Notify({
+                        Title = "Discord Link Copied!",
+                        Content = "The invite link has been copied to your clipboard.",
+                        Duration = 5
+                    })
+                else
+                    WindUI:Notify({
+                        Title = "Error",
+                        Content = "Your executor does not support setclipboard!",
+                        Duration = 5
+                    })
+                end
+            end
+        },
+        {
+            Title = "No",
+            Callback = function()
+                -- Dialog closes automatically
+            end
+        }
+    }
+})
 
 -- Send Loaded Toast Notification
 WindUI:Notify({
@@ -2287,3 +2323,4 @@ WindUI:Notify({
     Content = "Welcome to Boost Hub!",
     Duration = 4,
 })
+
