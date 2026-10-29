@@ -55,7 +55,7 @@ getgenv().RNGDelay = getgenv().BoostHubConfig.RNGDelay
 getgenv().AntiBanEnabled = getgenv().BoostHubConfig.AntiBanEnabled
 
 -- Text Generator State Variables
-local textGenText = "testing"
+local textGenText = "Type Something Here"
 local textGenFont = "FredokaOne"
 local textGenColor = "#ff0000"
 local textGenStrokeColor = "#000000"
@@ -298,9 +298,9 @@ local Window = WindUI:CreateWindow({
         end,
     },
     KeySystem = {
-        Key = { "KEY_383783828299263", "KEY_PREMIUM_ONLY_12982" }, 
-        Note = "Get your key from Linkvertise or use testing keys!",
-        URL = "https://linkvertise.com/10198436/EQPCQ263XIi1", 
+        Key = { "KEY_383783828299263" }, 
+        Note = "Get your key from Work.Ink",
+        URL = "https://work.ink/2Htv/f5f58eb7-e3fb-4304-95f2-9009d83ea701", 
         SaveKey = true,
     }
 })
