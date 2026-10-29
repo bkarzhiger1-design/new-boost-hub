@@ -298,9 +298,9 @@ local Window = WindUI:CreateWindow({
         end,
     },
     KeySystem = {
-        Key = { "KEY_383783828299263" }, 
-        Note = "Get your key from Work.Ink",
-        URL = "https://work.ink/2Htv/f5f58eb7-e3fb-4304-95f2-9009d83ea701", 
+        Key = { "KEY_29289274839" }, 
+        Note = "Get your key from Linkvertise!",
+        URL = "https://link-center.net/10198436/iA3fmHzEuE2C", 
         SaveKey = true,
     }
 })
@@ -2227,6 +2227,15 @@ OtherTab:Button({
     end,
 })
 
+OtherTab:Button({
+    Title = "Cookie Hub",
+    Desc = "External script hub",
+    Callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/bkarzhiger1-design/cookie-hub/refs/heads/main/cookie-hub.lua"))()
+        WindUI:Notify({ Title = "Cookie Hub", Content = "Loaded Cookie Hub successfully!", Duration = 3 })
+    end,
+})
+
 -- =============================================================
 --                      11. SETTINGS TAB
 -- =============================================================
@@ -2279,6 +2288,41 @@ SettingsTab:Keybind({
     Callback = function(key)
         Window:ToggleKey(key)
     end,
+})
+
+-- =============================================================
+--                 DISCORD POP-UP DIALOG
+-- =============================================================
+Window:Dialog({
+    Title = "Join Our Community!",
+    Content = "Would You Like To Join Our Discord Server?",
+    Buttons = {
+        {
+            Title = "Yes",
+            Callback = function()
+                if setclipboard then
+                    setclipboard("https://discord.gg/v2BxRgTEP")
+                    WindUI:Notify({
+                        Title = "Discord Link Copied!",
+                        Content = "The invite link has been copied to your clipboard.",
+                        Duration = 5
+                    })
+                else
+                    WindUI:Notify({
+                        Title = "Error",
+                        Content = "Your executor does not support setclipboard!",
+                        Duration = 5
+                    })
+                end
+            end
+        },
+        {
+            Title = "No",
+            Callback = function()
+                -- Dialog closes automatically
+            end
+        }
+    }
 })
 
 -- Send Loaded Toast Notification
