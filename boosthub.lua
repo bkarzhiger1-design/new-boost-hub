@@ -298,9 +298,9 @@ local Window = WindUI:CreateWindow({
         end,
     },
     KeySystem = {
-        Key = { "KEY_29289274839" }, 
-        Note = "Get your key from Linkvertise!",
-        URL = "https://link-center.net/10198436/iA3fmHzEuE2C", 
+        Key = { "ILoveXeavz" }, 
+        Note = "Get your key from Work.Ink",
+        URL = "https://work.ink/381W/key-system-boost-hub", 
         SaveKey = true,
     }
 })
