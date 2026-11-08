@@ -505,8 +505,8 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[-] Added persistent begged players tracking so you never beg the same person twice\n[-] Added 40s automatic teleport fallback if pathfinding can't reach a player\n[-] Improved configuration saving/loading reliability on mobile executors",
-            Duration = 8
+            Content = "[+] Added Player ESP (Visual tab)\n[+] Added Low Gravity toggle (Main tab)\n[-] Removed the key system\n[-] Updated Discord invite links\n[-] Fixed config list loading in the Configure tab\n[-] Added persistent begged players tracking so you never beg the same person twice\n[-] Added 40s automatic teleport fallback if pathfinding can't reach a player\n[-] Improved configuration saving/loading reliability on mobile executors",
+            Duration = 12
         })
     end,
 })
@@ -731,6 +731,28 @@ MainTab:Toggle({
                 end
             end
             invisSavedTransparencies = {}
+        end
+    end,
+})
+
+local lowGravity = false
+local origGravity = workspace.Gravity
+MainTab:Toggle({
+    Title = "Low Gravity",
+    Desc = "Lowers gravity so you fall slowly and jump higher",
+    Value = false,
+    Callback = function(state)
+        lowGravity = state
+        if state then
+            if not getgenv().AntiBanEnabled then
+                WindUI:Notify({ Title = "Ban Warning", Content = "Warning! There is a chance that you can get banned", Duration = 3 })
+            end
+            origGravity = workspace.Gravity
+            workspace.Gravity = 60
+            WindUI:Notify({ Title = "Low Gravity", Content = "Low Gravity enabled!", Duration = 3 })
+        else
+            workspace.Gravity = origGravity
+            WindUI:Notify({ Title = "Low Gravity", Content = "Gravity restored to normal.", Duration = 3 })
         end
     end,
 })
@@ -2017,6 +2039,127 @@ VisualTab:Toggle({
         end
         getgenv().HideOthers = state
         WindUI:Notify({ Title = "Hide Players", Content = state and "Hidden other players!" or "Showed other players!", Duration = 3 })
+    end,
+})
+
+VisualTab:Section({ Title = "Player ESP" })
+
+local espEnabled = false
+local espObjects = {}
+local espLabels = {}
+local espConnections = {}
+
+local function removeESP(plr)
+    if espObjects[plr] then
+        for _, obj in pairs(espObjects[plr]) do
+            pcall(function() obj:Destroy() end)
+        end
+        espObjects[plr] = nil
+    end
+    espLabels[plr] = nil
+end
+
+local function createESP(plr)
+    if plr == Players.LocalPlayer then return end
+    removeESP(plr)
+
+    local char = plr.Character
+    if not char then return end
+
+    local objs = {}
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "BoostHubESP"
+    highlight.FillColor = Color3.fromRGB(0, 255, 120)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.6
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Adornee = char
+    highlight.Parent = char
+    table.insert(objs, highlight)
+
+    local head = char:FindFirstChild("Head")
+    if head then
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "BoostHubESPName"
+        billboard.Size = UDim2.new(0, 160, 0, 36)
+        billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+        billboard.AlwaysOnTop = true
+        billboard.Adornee = head
+        billboard.Parent = head
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.TextStrokeTransparency = 0
+        label.TextSize = 14
+        label.Font = Enum.Font.GothamBold
+        label.Text = plr.DisplayName .. " (@" .. plr.Name .. ")"
+        label.Parent = billboard
+
+        table.insert(objs, billboard)
+        espLabels[plr] = label
+    end
+
+    espObjects[plr] = objs
+end
+
+local function hookPlayerESP(plr)
+    if plr == Players.LocalPlayer then return end
+    if plr.Character then
+        createESP(plr)
+    end
+    table.insert(espConnections, plr.CharacterAdded:Connect(function()
+        task.wait(1)
+        if espEnabled then
+            createESP(plr)
+        end
+    end))
+end
+
+VisualTab:Toggle({
+    Title = "Player ESP",
+    Desc = "Highlights all players through walls and shows their name and distance",
+    Value = false,
+    Callback = function(state)
+        espEnabled = state
+        if state then
+            for _, p in ipairs(Players:GetPlayers()) do
+                hookPlayerESP(p)
+            end
+            table.insert(espConnections, Players.PlayerAdded:Connect(hookPlayerESP))
+            table.insert(espConnections, Players.PlayerRemoving:Connect(removeESP))
+
+            task.spawn(function()
+                while espEnabled do
+                    local myChar = Players.LocalPlayer.Character
+                    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                    for plr, label in pairs(espLabels) do
+                        pcall(function()
+                            local theirHrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+                            if myHrp and theirHrp and label and label.Parent then
+                                local dist = math.floor((myHrp.Position - theirHrp.Position).Magnitude)
+                                label.Text = plr.DisplayName .. " (@" .. plr.Name .. ")\n[" .. dist .. " studs]"
+                            end
+                        end)
+                    end
+                    task.wait(0.5)
+                end
+            end)
+
+            WindUI:Notify({ Title = "Player ESP", Content = "Player ESP enabled!", Duration = 3 })
+        else
+            for _, conn in ipairs(espConnections) do
+                pcall(function() conn:Disconnect() end)
+            end
+            espConnections = {}
+            for plr in pairs(espObjects) do
+                removeESP(plr)
+            end
+            WindUI:Notify({ Title = "Player ESP", Content = "Player ESP disabled!", Duration = 3 })
+        end
     end,
 })
 
