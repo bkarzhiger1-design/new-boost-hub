@@ -297,6 +297,12 @@ local Window = WindUI:CreateWindow({
             WindUI:Notify({ Title = "Profile", Content = "Logged in as " .. game.Players.LocalPlayer.DisplayName, Duration = 3 })
         end,
     },
+    KeySystem = {
+        Key = { "818482910837" },
+        Note = "Get Your Key From Discord",
+        URL = "https://discord.gg/gydHWv8Bx",
+        SaveKey = true,
+    }
 })
 
 -- CREATE TABS
@@ -505,7 +511,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[+] Added Player ESP (Visual tab)\n[+] Added Low Gravity toggle (Main tab)\n[-] Removed the key system\n[-] Updated Discord invite links\n[-] Fixed config list loading in the Configure tab\n[-] Added persistent begged players tracking so you never beg the same person twice\n[-] Added 40s automatic teleport fallback if pathfinding can't reach a player\n[-] Improved configuration saving/loading reliability on mobile executors",
+            Content = "[+] Added Player ESP (Visual tab)\n[+] Added Low Gravity toggle (Main tab)\n[-] Key system is back (get your key from Discord)\n[-] Updated Discord invite links\n[-] Fixed config list loading in the Configure tab\n[-] Added persistent begged players tracking so you never beg the same person twice\n[-] Added 40s automatic teleport fallback if pathfinding can't reach a player\n[-] Improved configuration saving/loading reliability on mobile executors",
             Duration = 12
         })
     end,
@@ -2388,7 +2394,7 @@ SettingsTab:Button({
 
 SettingsTab:Section({ Title = "Community & Links" })
 
-local DiscordInvite = "https://discord.gg/fdNcwysDg"
+local DiscordInvite = "https://discord.gg/gydHWv8Bx"
 local ScriptBloxLink = "https://scriptblox.com/u/guyy"
 
 SettingsTab:Button({
@@ -2438,7 +2444,7 @@ Window:Dialog({
             Title = "Yes",
             Callback = function()
                 if setclipboard then
-                    setclipboard("https://discord.gg/fdNcwysDg")
+                    setclipboard("https://discord.gg/gydHWv8Bx")
                     WindUI:Notify({
                         Title = "Discord Link Copied!",
                         Content = "The invite link has been copied to your clipboard.",
