@@ -511,7 +511,7 @@ MainTab:Button({
     Callback = function()
         WindUI:Notify({
             Title = "Boost Hub - Update Log",
-            Content = "[+] Added Player ESP (Visual tab)\n[+] Added Low Gravity toggle (Main tab)\n[-] Key system is back (get your key from Discord)\n[-] Updated Discord invite links\n[-] Fixed config list loading in the Configure tab\n[-] Added persistent begged players tracking so you never beg the same person twice\n[-] Added 40s automatic teleport fallback if pathfinding can't reach a player\n[-] Improved configuration saving/loading reliability on mobile executors",
+            Content = "[+] Added Hop To Most Players Server [NEW] (Hop tab)\n[-] Removed Hop To Rich Server & Hop To Owner Server\n[+] Added Player ESP (Visual tab)\n[+] Added Low Gravity toggle (Main tab)\n[-] Key system is back (get your key from Discord)\n[-] Updated Discord invite links\n[-] Fixed config list loading in the Configure tab",
             Duration = 12
         })
     end,
@@ -1868,27 +1868,34 @@ HopTab:Button({
 })
 
 HopTab:Button({
-    Title = "Join Owner Server",
-    Desc = "Teleports to owner 'bvetterdays' if currently playing",
+    Title = "Hop To Most Players Server [NEW]",
+    Desc = "Suggested by Amy_nggg",
     Callback = function()
-        local joined = TryTeleportToPlayer("bvetterdays", "Owner Server")
-        if not joined then
-            WindUI:Notify({ Title = "Owner Server", Content = "Owner (bvetterdays) is currently offline or not in a game!", Duration = 4 })
-        end
-    end,
-})
+        WindUI:Notify({ Title = "Most Players Hop", Content = "Searching for high-player servers...", Duration = 3 })
+        task.spawn(function()
+            local placeId = game.PlaceId
+            local req = (syn and syn.request) or (http and http.request) or http_request or request
+            if not req then
+                WindUI:Notify({ Title = "Error", Content = "Your executor does not support HTTP requests!", Duration = 4 })
+                return
+            end
 
-HopTab:Button({
-    Title = "Join Rich Server",
-    Desc = "Joins valchuuz -> ZephyReveries -> angel019999",
-    Callback = function()
-        WindUI:Notify({ Title = "Rich Server", Content = "Searching for available Rich Servers...", Duration = 3 })
+            local raw = req({ Url = string.format("https://games.roblox.com/v1/games/%d/servers/0?sortOrder=Desc&limit=100", placeId) })
+            if raw and raw.Body then
+                local data = HttpService:JSONDecode(raw.Body)
+                if data and data.data then
+                    for _, server in ipairs(data.data) do
+                        if type(server) == "table" and server.id ~= game.JobId and server.playing < server.maxPlayers then
+                            WindUI:Notify({ Title = "Server Found", Content = "Teleporting to server with " .. tostring(server.playing) .. " players!", Duration = 3 })
+                            TeleportService:TeleportToPlaceInstance(placeId, server.id, Players.LocalPlayer)
+                            return
+                        end
+                    end
+                end
+            end
 
-        if TryTeleportToPlayer("valchuuz", "Rich Server (valchuuz)") then return end
-        if TryTeleportToPlayer("ZephyReveries", "Rich Server (ZephyReveries)") then return end
-        if TryTeleportToPlayer("angel019999", "Rich Server (angel019999)") then return end
-
-        WindUI:Notify({ Title = "Hop Failed", Content = "No Rich Servers Were Found", Duration = 5 })
+            WindUI:Notify({ Title = "Server Hop Failed", Content = "Could not find a full/populated server right now.", Duration = 4 })
+        end)
     end,
 })
 
