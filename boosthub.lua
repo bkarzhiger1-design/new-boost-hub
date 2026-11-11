@@ -324,7 +324,7 @@ local Window = WindUI:CreateWindow({
     KeySystem = {
         Key = { "818482910837" },
         Note = "Get Your Key From Discord",
-        URL = "https://discord.gg/u69DJgFK3",
+        URL = "https://discord.gg/gydHWv8Bx",
         SaveKey = true,
     }
 })
@@ -1074,6 +1074,9 @@ applyAutoGoal = function(state)
     end
     
     task.spawn(function()
+        local TweenService = game:GetService("TweenService")
+        local TWEEN_SPEED = 20 -- 20 studs per second
+
         while getgenv().AutoGoal do
             local currentChar = game.Players.LocalPlayer.Character
             local soccerBall = workspace:FindFirstChild("SoccerBall", true)
@@ -1083,22 +1086,31 @@ applyAutoGoal = function(state)
                 local ballPart = soccerBall:IsA("BasePart") and soccerBall or soccerBall:FindFirstChildWhichIsA("BasePart", true)
                 
                 if ballPart then
-                    hrp.CFrame = ballPart.CFrame + Vector3.new(0, 2, -3)
+                    -- 1. Tween smoothly behind the ball (pointed towards the goal)
+                    local targetPos = ballPart.CFrame + Vector3.new(0, 2, -4)
+                    local distance = (hrp.Position - targetPos.Position).Magnitude
+                    local tweenTime = math.max(0.1, distance / TWEEN_SPEED)
+
+                    local tweenInfo = TweenInfo.new(tweenTime, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+                    local tween = TweenService:Create(hrp, tweenInfo, { CFrame = targetPos })
                     
-                    if ballPart:IsA("BasePart") then
-                        ballPart.AssemblyLinearVelocity = Vector3.new(0, 5, 35)
+                    tween:Play()
+                    tween.Completed:Wait()
+
+                    -- 2. Smoothly push the ball towards the goal with linear velocity kick
+                    if ballPart:IsA("BasePart") and getgenv().AutoGoal then
+                        ballPart.AssemblyLinearVelocity = Vector3.new(0, 5, 40)
                     end
                 end
             end
             
-            local waitTime = math.random(30, 40) / 10
+            local waitTime = math.random(25, 35) / 10
             task.wait(waitTime)
         end
     end)
     
-    WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal activated (Pushing every 3-4s without anchor)!", Duration = 3 })
+    WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal activated (Tweening at Speed 20)! ⚽", Duration = 3 })
 end
-
 local goalToggle = FarmTab:Toggle({
     Title = "Auto Goal",
     Desc = "Teleports to SoccerBall and pushes it towards the goal every 3-4 seconds",
