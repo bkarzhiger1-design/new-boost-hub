@@ -1086,8 +1086,12 @@ applyAutoGoal = function(state)
                 local ballPart = soccerBall:IsA("BasePart") and soccerBall or soccerBall:FindFirstChildWhichIsA("BasePart", true)
                 
                 if ballPart then
-                    -- 1. Tween smoothly behind the ball (pointed towards the goal)
-                    local targetPos = ballPart.CFrame + Vector3.new(0, 2, -4)
+                    -- Temporarily disable collision with the ball while tweening to prevent flinging
+                    local originalCanCollide = ballPart.CanCollide
+                    ballPart.CanCollide = false
+
+                    -- 1. Tween smoothly to position near the ball (Speed 20)
+                    local targetPos = ballPart.CFrame + Vector3.new(0, 1.5, -3.5)
                     local distance = (hrp.Position - targetPos.Position).Magnitude
                     local tweenTime = math.max(0.1, distance / TWEEN_SPEED)
 
@@ -1097,19 +1101,23 @@ applyAutoGoal = function(state)
                     tween:Play()
                     tween.Completed:Wait()
 
-                    -- 2. Smoothly push the ball towards the goal with linear velocity kick
+                    -- Restore collision & apply push velocity to make sure ball moves
+                    ballPart.CanCollide = originalCanCollide
                     if ballPart:IsA("BasePart") and getgenv().AutoGoal then
-                        ballPart.AssemblyLinearVelocity = Vector3.new(0, 5, 40)
+                        -- Unanchor if anchored to ensure physics reaction
+                        ballPart.Anchored = false
+                        ballPart:ApplyImpulse(Vector3.new(0, 10, 80) * ballPart:GetMass())
+                        ballPart.AssemblyLinearVelocity = Vector3.new(0, 12, 45)
                     end
                 end
             end
             
-            local waitTime = math.random(25, 35) / 10
-            task.wait(waitTime)
+            -- Exact 4 second cooldown delay after pushing the ball
+            task.wait(4)
         end
     end)
     
-    WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal activated (Tweening at Speed 20)! ⚽", Duration = 3 })
+    WindUI:Notify({ Title = "Auto Goal", Content = "Auto Goal activated (Tween Speed 20, 4s Push Delay)! ⚽", Duration = 3 })
 end
 local goalToggle = FarmTab:Toggle({
     Title = "Auto Goal",
