@@ -324,7 +324,7 @@ local Window = WindUI:CreateWindow({
     KeySystem = {
         Key = { "818482910837" },
         Note = "Get Your Key From Discord",
-        URL = "https://discord.gg/gydHWv8Bx",
+        URL = "https://discord.gg/u69DJgFK3",
         SaveKey = true,
     }
 })
